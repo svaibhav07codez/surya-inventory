@@ -20,7 +20,6 @@ export default function InventoryManagementApp() {
   }, []);
 
   const checkUser = async () => {
-    // Check if user is stored in localStorage
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
@@ -93,7 +92,6 @@ function LoginPage({ setUser }) {
     setLoading(true);
 
     try {
-      // Query users table
       const { data, error: dbError } = await supabase
         .from('users')
         .select('*')
@@ -106,8 +104,6 @@ function LoginPage({ setUser }) {
         return;
       }
 
-      // In production, verify password hash here
-      // For now, simple comparison (will improve in security phase)
       if (data.password_hash === password) {
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
@@ -347,16 +343,28 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
 
   const fetchDashboardStats = async () => {
     try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Fetch today's sales
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('total')
+        .gte('sale_date', today.toISOString());
+
       // Fetch low stock products
       const { data: products } = await supabase
         .from('products')
         .select('id')
         .lte('current_quantity', supabase.raw('minimum_quantity'));
 
-      setStats(prev => ({
-        ...prev,
-        lowStockCount: products?.length || 0
-      }));
+      setStats({
+        todaySales: salesData?.length || 0,
+        todayAmount: salesData?.reduce((sum, s) => sum + parseFloat(s.total), 0) || 0,
+        lowStockCount: products?.length || 0,
+        pendingPayments: 0,
+        totalOutstanding: 0
+      });
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
@@ -456,13 +464,6 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
             </button>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Getting Started</h3>
-          <p className="text-gray-600">
-            Products and sales features are coming soon! Admin can add products from the Products section.
-          </p>
-        </div>
       </div>
     );
   }
@@ -547,18 +548,18 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">🚀 Connected to Live Database!</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">🎉 Sales System Now Live!</h2>
         <div className="space-y-3">
           <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-green-900 font-medium">✓ Supabase Connected</span>
-            <span className="text-xs text-green-700">Live Data</span>
+            <span className="text-green-900 font-medium">✓ Product Management</span>
+            <span className="text-xs text-green-700">Working</span>
           </div>
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-            <span className="text-blue-900 font-medium">🎯 Next: Product Management</span>
-            <span className="text-xs text-blue-700">Phase 1</span>
+          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+            <span className="text-green-900 font-medium">✓ Sales System</span>
+            <span className="text-xs text-green-700">New!</span>
           </div>
           <p className="text-sm text-gray-600 pt-3">
-            Your data is now stored permanently. Add products from the Products section to get started!
+            Create sales, generate bills, and manage inventory in real-time!
           </p>
         </div>
       </div>
@@ -588,70 +589,596 @@ function StatCard({ title, value, subtitle, icon: Icon, color }) {
   );
 }
 
+// NewSale Component with full functionality
 function NewSale({ saleType, setSaleType, setCurrentView }) {
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">New Sale</h2>
+  const [products, setProducts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [paymentMode, setPaymentMode] = useState('cash');
+  const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showBill, setShowBill] = useState(false);
+  const [saleData, setSaleData] = useState(null);
+
+  useEffect(() => {
+    if (saleType) {
+      fetchProducts();
+    }
+  }, [saleType]);
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .gt('current_quantity', 0)
+        .order('name');
       
-      {!saleType ? (
-        <div>
-          <p className="text-gray-600 mb-6">Select the type of sale you want to create:</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={() => setSaleType('quick')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all"
-            >
-              <ShoppingCart className="h-12 w-12 text-blue-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Quick Sale</h3>
-              <p className="text-sm text-gray-600">Walk-in customer, no profile needed</p>
-            </button>
-            <button
-              onClick={() => setSaleType('customer')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all"
-            >
-              <Users className="h-12 w-12 text-green-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Customer Sale</h3>
-              <p className="text-sm text-gray-600">Regular customer with profile</p>
-            </button>
-            <button
-              onClick={() => setSaleType('garage')}
-              className="p-6 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
-            >
-              <FileText className="h-12 w-12 text-purple-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">Garage Sale</h3>
-              <p className="text-sm text-gray-600">Direct sale to garage</p>
-            </button>
-          </div>
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+    if (term.length > 0) {
+      const filtered = products.filter(p => 
+        p.sku.toLowerCase().includes(term.toLowerCase()) ||
+        p.name.toLowerCase().includes(term.toLowerCase())
+      );
+      setSearchResults(filtered);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const addToCart = (product) => {
+    const existingItem = cart.find(item => item.id === product.id);
+    if (existingItem) {
+      if (existingItem.quantity >= product.current_quantity) {
+        alert('Cannot add more than available stock!');
+        return;
+      }
+      setCart(cart.map(item => 
+        item.id === product.id 
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      setCart([...cart, { ...product, quantity: 1 }]);
+    }
+    setSearchTerm('');
+    setSearchResults([]);
+  };
+
+  const updateQuantity = (productId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    const product = cart.find(item => item.id === productId);
+    if (newQuantity > product.current_quantity) {
+      alert('Cannot exceed available stock!');
+      return;
+    }
+    setCart(cart.map(item => 
+      item.id === productId ? { ...item, quantity: newQuantity } : item
+    ));
+  };
+
+  const removeFromCart = (productId) => {
+    setCart(cart.filter(item => item.id !== productId));
+  };
+
+  const calculateTotals = () => {
+    let subtotal = 0;
+    let totalGst = 0;
+
+    cart.forEach(item => {
+      const itemTotal = item.selling_price * item.quantity;
+      const itemGst = (itemTotal * item.gst_rate) / 100;
+      subtotal += itemTotal;
+      totalGst += itemGst;
+    });
+
+    return {
+      subtotal: subtotal.toFixed(2),
+      gst: totalGst.toFixed(2),
+      total: (subtotal + totalGst).toFixed(2)
+    };
+  };
+
+  const handleCompleteSale = async () => {
+    if (cart.length === 0) {
+      alert('Please add products to cart');
+      return;
+    }
+
+    if ((paymentStatus === 'partial' || paymentStatus === 'credit') && !amountPaid) {
+      alert('Please enter amount paid');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const totals = calculateTotals();
+      const saleNumber = `SALE${Date.now()}`;
+      
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert([{
+          sale_number: saleNumber,
+          sale_type: saleType,
+          subtotal: parseFloat(totals.subtotal),
+          gst_amount: parseFloat(totals.gst),
+          total: parseFloat(totals.total),
+          payment_mode: paymentMode,
+          payment_status: paymentStatus,
+          amount_paid: paymentStatus === 'paid' ? parseFloat(totals.total) : parseFloat(amountPaid || 0)
+        }])
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      const saleItems = cart.map(item => ({
+        sale_id: sale.id,
+        product_id: item.id,
+        product_sku: item.sku,
+        product_name: item.name,
+        quantity: item.quantity,
+        price: item.selling_price,
+        gst_rate: item.gst_rate,
+        gst_amount: ((item.selling_price * item.quantity * item.gst_rate) / 100),
+        total: item.selling_price * item.quantity * (1 + item.gst_rate / 100)
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('sale_items')
+        .insert(saleItems);
+
+      if (itemsError) throw itemsError;
+
+      for (const item of cart) {
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ 
+            current_quantity: item.current_quantity - item.quantity 
+          })
+          .eq('id', item.id);
+
+        if (updateError) throw updateError;
+      }
+
+      setSaleData({
+        ...sale,
+        items: cart,
+        totals
+      });
+      setShowBill(true);
+      
+    } catch (error) {
+      console.error('Error completing sale:', error);
+      alert('Failed to complete sale: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetSale = () => {
+    setCart([]);
+    setSearchTerm('');
+    setSearchResults([]);
+    setPaymentMode('cash');
+    setPaymentStatus('paid');
+    setAmountPaid('');
+    setShowBill(false);
+    setSaleData(null);
+    fetchProducts();
+  };
+
+  if (!saleType) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">New Sale</h2>
+        <p className="text-gray-600 mb-6">Select the type of sale you want to create:</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => setSaleType('quick')}
+            className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all"
+          >
+            <ShoppingCart className="h-12 w-12 text-blue-600 mx-auto mb-3" />
+            <h3 className="font-semibold text-gray-900 mb-2">Quick Sale</h3>
+            <p className="text-sm text-gray-600">Walk-in customer, no profile needed</p>
+          </button>
+          <button
+            onClick={() => setSaleType('customer')}
+            className="p-6 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all"
+          >
+            <Users className="h-12 w-12 text-green-600 mx-auto mb-3" />
+            <h3 className="font-semibold text-gray-900 mb-2">Customer Sale</h3>
+            <p className="text-sm text-gray-600">Regular customer with profile</p>
+          </button>
+          <button
+            onClick={() => setSaleType('garage')}
+            className="p-6 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all"
+          >
+            <FileText className="h-12 w-12 text-purple-600 mx-auto mb-3" />
+            <h3 className="font-semibold text-gray-900 mb-2">Garage Sale</h3>
+            <p className="text-sm text-gray-600">Direct sale to garage</p>
+          </button>
         </div>
-      ) : (
-        <div>
+      </div>
+    );
+  }
+
+  if (showBill && saleData) {
+    return <BillView saleData={saleData} onClose={() => setCurrentView('dashboard')} onNewSale={() => {
+      resetSale();
+      setSaleType(saleType);
+    }} />;
+  }
+
+  const totals = calculateTotals();
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {saleType === 'quick' && 'Quick Sale'}
+              {saleType === 'customer' && 'Customer Sale'}
+              {saleType === 'garage' && 'Garage Sale'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {saleType === 'quick' && 'Walk-in customer - no profile needed'}
+              {saleType === 'customer' && 'Sale to registered customer'}
+              {saleType === 'garage' && 'Direct sale to garage'}
+            </p>
+          </div>
           <button
             onClick={() => setCurrentView('dashboard')}
-            className="mb-4 text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
+            className="text-blue-600 hover:text-blue-700 font-medium"
           >
             ← Back to Dashboard
           </button>
-          <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
-            <div className="mb-4">
-              {saleType === 'quick' && <ShoppingCart className="h-16 w-16 text-blue-600 mx-auto mb-3" />}
-              {saleType === 'customer' && <Users className="h-16 w-16 text-green-600 mx-auto mb-3" />}
-              {saleType === 'garage' && <FileText className="h-16 w-16 text-purple-600 mx-auto mb-3" />}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Search Products</h3>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Search by SKU or product name..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {saleType.charAt(0).toUpperCase() + saleType.slice(1)} Sale
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Coming in Phase 1! Add products first from Products section.
-            </p>
+
+            {searchResults.length > 0 && (
+              <div className="mt-4 max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                {searchResults.map(product => (
+                  <button
+                    key={product.id}
+                    onClick={() => addToCart(product)}
+                    className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium text-gray-900">{product.name}</div>
+                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {product.current_quantity}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-gray-900">₹{product.selling_price}</div>
+                      <div className="text-xs text-gray-500">GST: {product.gst_rate}%</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Cart ({cart.length} items)</h3>
+            
+            {cart.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <ShoppingCart className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                <p>No items in cart. Search and add products above.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cart.map(item => {
+                  const itemTotal = item.selling_price * item.quantity;
+                  const itemGst = (itemTotal * item.gst_rate) / 100;
+                  return (
+                    <div key={item.id} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">{item.name}</h4>
+                          <p className="text-sm text-gray-600">SKU: {item.sku}</p>
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50"
+                          >
+                            -
+                          </button>
+                          <span className="w-12 text-center font-medium">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            disabled={item.quantity >= item.current_quantity}
+                            className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          >
+                            +
+                          </button>
+                          <span className="text-sm text-gray-500">
+                            (Max: {item.current_quantity})
+                          </span>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">
+                            ₹{(itemTotal + itemGst).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Base: ₹{itemTotal.toFixed(2)} + GST: ₹{itemGst.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between text-gray-700">
+                <span>Subtotal:</span>
+                <span>₹{totals.subtotal}</span>
+              </div>
+              <div className="flex justify-between text-gray-700">
+                <span>GST:</span>
+                <span>₹{totals.gst}</span>
+              </div>
+              <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
+                <span>Total:</span>
+                <span>₹{totals.total}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Details</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Mode
+                </label>
+                <select
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI/Google Pay</option>
+                  <option value="card">Card</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payment Status
+                </label>
+                <select
+                  value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial Payment</option>
+                  <option value="credit">Credit (Pay Later)</option>
+                </select>
+              </div>
+
+              {(paymentStatus === 'partial' || paymentStatus === 'credit') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Amount Paid
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    placeholder="Enter amount paid"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  {amountPaid && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      Remaining: ₹{(parseFloat(totals.total) - parseFloat(amountPaid || 0)).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
-              onClick={() => setSaleType(null)}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              onClick={handleCompleteSale}
+              disabled={loading || cart.length === 0}
+              className="w-full mt-6 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              Choose different sale type
+              {loading ? 'Processing...' : 'Complete Sale & Print Bill'}
             </button>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// Bill View Component
+function BillView({ saleData, onClose, onNewSale }) {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #bill, #bill * {
+            visibility: visible;
+          }
+          #bill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          .print-hide {
+            display: none !important;
+          }
+        }
+      `}</style>
+      
+      <div className="bg-white rounded-lg shadow-lg p-8" id="bill">
+        <div className="text-center border-b-2 border-gray-300 pb-4 mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Surya's Auto Parts</h1>
+          <p className="text-gray-600 mt-1">Automobile Spare Parts</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Invoice #: {saleData.sale_number} | Date: {new Date(saleData.sale_date).toLocaleString('en-IN')}
+          </p>
+        </div>
+
+        <table className="w-full mb-6">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-4 py-2 text-left">Item</th>
+              <th className="px-4 py-2 text-center">Qty</th>
+              <th className="px-4 py-2 text-right">Price</th>
+              <th className="px-4 py-2 text-right">GST</th>
+              <th className="px-4 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {saleData.items.map((item, index) => {
+              const itemTotal = item.selling_price * item.quantity;
+              const itemGst = (itemTotal * item.gst_rate) / 100;
+              return (
+                <tr key={index} className="border-b">
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-sm text-gray-600">SKU: {item.sku}</div>
+                  </td>
+                  <td className="px-4 py-3 text-center">{item.quantity}</td>
+                  <td className="px-4 py-3 text-right">₹{item.selling_price}</td>
+                  <td className="px-4 py-3 text-right">₹{itemGst.toFixed(2)} ({item.gst_rate}%)</td>
+                  <td className="px-4 py-3 text-right font-medium">₹{(itemTotal + itemGst).toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        <div className="flex justify-end mb-6">
+          <div className="w-64 space-y-2">
+            <div className="flex justify-between text-gray-700">
+              <span>Subtotal:</span>
+              <span>₹{saleData.totals.subtotal}</span>
+            </div>
+            <div className="flex justify-between text-gray-700">
+              <span>GST:</span>
+              <span>₹{saleData.totals.gst}</span>
+            </div>
+            <div className="border-t-2 pt-2 flex justify-between text-xl font-bold">
+              <span>Total:</span>
+              <span>₹{saleData.totals.total}</span>
+            </div>
+            <div className="border-t pt-2 flex justify-between text-green-600 font-medium">
+              <span>Paid:</span>
+              <span>₹{saleData.amount_paid.toFixed(2)}</span>
+            </div>
+            {saleData.amount_paid < parseFloat(saleData.totals.total) && (
+              <div className="flex justify-between text-red-600 font-medium">
+                <span>Balance Due:</span>
+                <span>₹{(parseFloat(saleData.totals.total) - saleData.amount_paid).toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gray-50 p-4 rounded-lg mb-6">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Payment Mode:</span>
+              <span className="ml-2 font-medium capitalize">{saleData.payment_mode.replace('_', ' ')}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Payment Status:</span>
+              <span className={`ml-2 font-medium capitalize ${
+                saleData.payment_status === 'paid' ? 'text-green-600' : 'text-orange-600'
+              }`}>
+                {saleData.payment_status}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center text-sm text-gray-600 border-t pt-4">
+          <p>Thank you for your business!</p>
+        </div>
+      </div>
+
+      <div className="flex gap-4 mt-6 print-hide">
+        <button
+          onClick={handlePrint}
+          className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 font-semibold"
+        >
+          Print Bill
+        </button>
+        <button
+          onClick={onNewSale}
+          className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-semibold"
+        >
+          New Sale
+        </button>
+        <button
+          onClick={onClose}
+          className="flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-semibold"
+        >
+          Back to Dashboard
+        </button>
+      </div>
     </div>
   );
 }
@@ -660,6 +1187,7 @@ function Products({ user }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -681,6 +1209,12 @@ function Products({ user }) {
     }
   };
 
+  const filteredProducts = products.filter(p =>
+    p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -696,25 +1230,41 @@ function Products({ user }) {
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Products</h2>
-        {user.role === 'admin' && (
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Product
-          </button>
-        )}
+        <div className="flex gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          {user.role === 'admin' && (
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Product
+            </button>
+          )}
+        </div>
       </div>
 
-      {products.length === 0 ? (
+      {filteredProducts.length === 0 ? (
         <div className="text-center py-12">
           <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchTerm ? 'No products found' : 'No products yet'}
+          </h3>
           <p className="text-gray-600 mb-4">
-            {user.role === 'admin' 
-              ? 'Start by adding your first product!'
-              : 'Ask admin to add products to get started.'}
+            {searchTerm 
+              ? 'Try a different search term'
+              : user.role === 'admin' 
+                ? 'Start by adding your first product!'
+                : 'Ask admin to add products to get started.'}
           </p>
         </div>
       ) : (
@@ -731,7 +1281,7 @@ function Products({ user }) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.sku}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{product.name}</td>
@@ -783,6 +1333,13 @@ function AddProductModal({ onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
+    
+    if (!formData.sku || !formData.name || !formData.category || !formData.purchase_price || 
+        !formData.selling_price || !formData.current_quantity || !formData.minimum_quantity) {
+      setError('Please fill all required fields');
+      return;
+    }
+
     setLoading(true);
 
     try {

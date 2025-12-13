@@ -1,21 +1,35 @@
-import React, { useState } from 'react';
-import { Search, Plus, AlertCircle, Package, Users, FileText, TrendingUp, DollarSign, ShoppingCart, LogOut, Menu, X, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { Search, Plus, AlertCircle, Package, Users, FileText, TrendingUp, DollarSign, ShoppingCart, LogOut, Menu, X, Eye, EyeOff, Edit2, Trash2 } from 'lucide-react';
 
-// Mock data for demo
-const mockData = {
-  users: [
-    { id: 1, username: 'admin', password: 'admin123', role: 'admin' },
-    { id: 2, username: 'salesrep', password: 'sales123', role: 'sales_rep' }
-  ]
-};
+// Initialize Supabase client
+const supabase = createClient(
+  'https://jgvniuntknkumupzubbt.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impndm5pdW50a25rdW11cHp1YmJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NDE3MjEsImV4cCI6MjA4MTExNzcyMX0.jXu6kaYMmLGXztrelEMrrinwqCSHZTaH_ybdWfnsf_M'
+);
 
 // Main App Component
 export default function InventoryManagementApp() {
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [saleType, setSaleType] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkUser();
+  }, []);
+
+  const checkUser = async () => {
+    // Check if user is stored in localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setLoading(false);
+  };
 
   const handleLogout = () => {
+    localStorage.removeItem('user');
     setUser(null);
     setCurrentView('dashboard');
     setSaleType(null);
@@ -25,6 +39,17 @@ export default function InventoryManagementApp() {
     setSaleType(type);
     setCurrentView('new-sale');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginPage setUser={setUser} />;
@@ -63,22 +88,37 @@ function LoginPage({ setUser }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('');
     setLoading(true);
 
-    setTimeout(() => {
-      const foundUser = mockData.users.find(
-        u => u.username === username && u.password === password
-      );
+    try {
+      // Query users table
+      const { data, error: dbError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
 
-      if (foundUser) {
-        setUser(foundUser);
+      if (dbError || !data) {
+        setError('Invalid username or password');
+        setLoading(false);
+        return;
+      }
+
+      // In production, verify password hash here
+      // For now, simple comparison (will improve in security phase)
+      if (data.password_hash === password) {
+        localStorage.setItem('user', JSON.stringify(data));
+        setUser(data);
       } else {
         setError('Invalid username or password');
       }
-      setLoading(false);
-    }, 500);
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    }
+    
+    setLoading(false);
   };
 
   const handleKeyPress = (e) => {
@@ -150,10 +190,10 @@ function LoginPage({ setUser }) {
         </div>
 
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <p className="text-xs font-semibold text-blue-900 mb-2">Demo Credentials:</p>
-          <div className="text-xs text-blue-700 space-y-1">
-            <p><strong>Admin:</strong> username: admin, password: admin123</p>
-            <p><strong>Sales Rep:</strong> username: salesrep, password: sales123</p>
+          <p className="text-xs font-semibold text-blue-900 mb-2">Default Admin Credentials:</p>
+          <div className="text-xs text-blue-700">
+            <p>Username: <strong>admin</strong></p>
+            <p>Password: <strong>admin123</strong></p>
           </div>
         </div>
       </div>
@@ -292,15 +332,46 @@ function ViewRenderer({ view, user, setCurrentView, saleType, setSaleType, handl
 
 // Dashboard Component
 function Dashboard({ user, setCurrentView, handleNewSale }) {
-  const stats = {
-    todaySales: 12,
-    todayAmount: 45280,
-    lowStockCount: 8,
-    pendingPayments: 15,
-    monthlyProfit: 125000,
-    totalOutstanding: 89500,
-    pendingCommission: 4250
+  const [stats, setStats] = useState({
+    todaySales: 0,
+    todayAmount: 0,
+    lowStockCount: 0,
+    pendingPayments: 0,
+    totalOutstanding: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      // Fetch low stock products
+      const { data: products } = await supabase
+        .from('products')
+        .select('id')
+        .lte('current_quantity', supabase.raw('minimum_quantity'));
+
+      setStats(prev => ({
+        ...prev,
+        lowStockCount: products?.length || 0
+      }));
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading dashboard...</p>
+      </div>
+    );
+  }
 
   // Sales Rep focused dashboard
   if (user.role === 'sales_rep') {
@@ -313,7 +384,6 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
           </div>
         </div>
 
-        {/* Quick Stats for Sales Rep */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <StatCard
             title="Today's Sales"
@@ -338,7 +408,6 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
           />
         </div>
 
-        {/* Low Stock Alert */}
         {stats.lowStockCount > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-3">
@@ -353,7 +422,6 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
           </div>
         )}
 
-        {/* Main Action - Create Sale */}
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-8 mb-6">
           <div className="text-center mb-6">
             <ShoppingCart className="h-16 w-16 text-white mx-auto mb-4" />
@@ -389,38 +457,17 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
           </div>
         </div>
 
-        {/* Recent Activity */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Sales Today</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Sale #1234</p>
-                <p className="text-sm text-gray-600">Walk-in customer</p>
-              </div>
-              <span className="font-semibold text-gray-900">₹2,450</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Sale #1233</p>
-                <p className="text-sm text-gray-600">Kumar Garage</p>
-              </div>
-              <span className="font-semibold text-gray-900">₹8,900</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Sale #1232</p>
-                <p className="text-sm text-gray-600">Rajesh - Regular Customer</p>
-              </div>
-              <span className="font-semibold text-gray-900">₹1,200</span>
-            </div>
-          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Getting Started</h3>
+          <p className="text-gray-600">
+            Products and sales features are coming soon! Admin can add products from the Products section.
+          </p>
         </div>
       </div>
     );
   }
 
-  // Admin dashboard remains detailed
+  // Admin dashboard
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">
@@ -472,7 +519,6 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
         </div>
       )}
 
-      {/* Quick Actions for Admin */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
         <button
           onClick={() => handleNewSale('quick')}
@@ -501,42 +547,19 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Business Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="font-medium text-gray-700 mb-3">This Month</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Sales:</span>
-                <span className="font-semibold">₹2,45,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Expenses:</span>
-                <span className="font-semibold">₹1,20,000</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t">
-                <span className="text-gray-900 font-medium">Profit:</span>
-                <span className="font-bold text-green-600">₹1,25,000</span>
-              </div>
-            </div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">🚀 Connected to Live Database!</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+            <span className="text-green-900 font-medium">✓ Supabase Connected</span>
+            <span className="text-xs text-green-700">Live Data</span>
           </div>
-          <div>
-            <h3 className="font-medium text-gray-700 mb-3">Pending Actions</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
-                <span className="text-sm text-yellow-900">Commission payments</span>
-                <span className="text-xs font-semibold text-yellow-700">₹4,250</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-red-50 rounded">
-                <span className="text-sm text-red-900">Low stock items</span>
-                <span className="text-xs font-semibold text-red-700">{stats.lowStockCount}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-orange-50 rounded">
-                <span className="text-sm text-orange-900">Pending collections</span>
-                <span className="text-xs font-semibold text-orange-700">₹89,500</span>
-              </div>
-            </div>
+          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+            <span className="text-blue-900 font-medium">🎯 Next: Product Management</span>
+            <span className="text-xs text-blue-700">Phase 1</span>
           </div>
+          <p className="text-sm text-gray-600 pt-3">
+            Your data is now stored permanently. Add products from the Products section to get started!
+          </p>
         </div>
       </div>
     </div>
@@ -618,7 +641,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
               {saleType.charAt(0).toUpperCase() + saleType.slice(1)} Sale
             </h3>
             <p className="text-gray-600 mb-4">
-              This interface will be implemented in Phase 1 with full functionality.
+              Coming in Phase 1! Add products first from Products section.
             </p>
             <button
               onClick={() => setSaleType(null)}
@@ -633,19 +656,278 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   );
 }
 
-function Products() {
+function Products({ user }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading products...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Products</h2>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Product
-        </button>
+        {user.role === 'admin' && (
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Product
+          </button>
+        )}
       </div>
-      <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
-        <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Product management will be implemented in Phase 1</p>
+
+      {products.length === 0 ? (
+        <div className="text-center py-12">
+          <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
+          <p className="text-gray-600 mb-4">
+            {user.role === 'admin' 
+              ? 'Start by adding your first product!'
+              : 'Ask admin to add products to get started.'}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GST %</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {products.map((product) => (
+                <tr key={product.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.sku}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{product.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{product.category}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">₹{product.selling_price}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      product.current_quantity <= product.minimum_quantity
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {product.current_quantity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{product.gst_rate}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showAddModal && (
+        <AddProductModal 
+          onClose={() => setShowAddModal(false)} 
+          onSuccess={() => {
+            fetchProducts();
+            setShowAddModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddProductModal({ onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    sku: '',
+    name: '',
+    category: '',
+    purchase_price: '',
+    selling_price: '',
+    gst_rate: '18',
+    current_quantity: '',
+    minimum_quantity: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const { error: dbError } = await supabase
+        .from('products')
+        .insert([{
+          ...formData,
+          purchase_price: parseFloat(formData.purchase_price),
+          selling_price: parseFloat(formData.selling_price),
+          gst_rate: parseFloat(formData.gst_rate),
+          current_quantity: parseInt(formData.current_quantity),
+          minimum_quantity: parseInt(formData.minimum_quantity)
+        }]);
+
+      if (dbError) throw dbError;
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Product</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
+            <input
+              type="text"
+              value={formData.sku}
+              onChange={(e) => setFormData({...formData, sku: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., BAT001"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., Exide Battery 12V"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+            <input
+              type="text"
+              value={formData.category}
+              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., Batteries"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.purchase_price}
+              onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="3500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.selling_price}
+              onChange={(e) => setFormData({...formData, selling_price: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="4200"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate (%) *</label>
+            <select
+              value={formData.gst_rate}
+              onChange={(e) => setFormData({...formData, gst_rate: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="0">0%</option>
+              <option value="5">5%</option>
+              <option value="12">12%</option>
+              <option value="18">18%</option>
+              <option value="28">28%</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Quantity *</label>
+            <input
+              type="number"
+              value={formData.current_quantity}
+              onChange={(e) => setFormData({...formData, current_quantity: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="50"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Quantity *</label>
+            <input
+              type="number"
+              value={formData.minimum_quantity}
+              onChange={(e) => setFormData({...formData, minimum_quantity: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="10"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-blue-300"
+          >
+            {loading ? 'Adding...' : 'Add Product'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -663,7 +945,7 @@ function Customers() {
       </div>
       <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
         <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Customer management will be implemented in Phase 2</p>
+        <p className="text-gray-600">Customer management coming in Phase 2</p>
       </div>
     </div>
   );
@@ -681,7 +963,7 @@ function Garages() {
       </div>
       <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
         <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Garage management will be implemented in Phase 2</p>
+        <p className="text-gray-600">Garage management coming in Phase 2</p>
       </div>
     </div>
   );
@@ -711,7 +993,7 @@ function Expenses() {
       </div>
       <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
         <DollarSign className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Expense tracking will be implemented in Phase 6</p>
+        <p className="text-gray-600">Expense tracking coming in Phase 6</p>
       </div>
     </div>
   );

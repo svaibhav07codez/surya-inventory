@@ -345,23 +345,39 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString();
 
       // Fetch today's sales
-      const { data: salesData } = await supabase
+      const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('total')
-        .gte('sale_date', today.toISOString());
+        .select('total, sale_date')
+        .gte('sale_date', todayISO);
 
-      // Fetch low stock products
-      const { data: products } = await supabase
+      if (salesError) {
+        console.error('Sales error:', salesError);
+      }
+
+      // Fetch ALL products to check stock levels
+      const { data: allProducts, error: productsError } = await supabase
         .from('products')
-        .select('id')
-        .lte('current_quantity', supabase.raw('minimum_quantity'));
+        .select('id, current_quantity, minimum_quantity');
+
+      if (productsError) {
+        console.error('Products error:', productsError);
+      }
+
+      // Filter low stock products in JavaScript
+      const lowStockProducts = allProducts?.filter(p => 
+        p.current_quantity <= p.minimum_quantity
+      ) || [];
+
+      console.log('Today sales:', salesData);
+      console.log('Low stock products:', lowStockProducts);
 
       setStats({
         todaySales: salesData?.length || 0,
         todayAmount: salesData?.reduce((sum, s) => sum + parseFloat(s.total), 0) || 0,
-        lowStockCount: products?.length || 0,
+        lowStockCount: lowStockProducts.length,
         pendingPayments: 0,
         totalOutstanding: 0
       });

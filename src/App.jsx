@@ -605,7 +605,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color }) {
   );
 }
 
-// NewSale Component with full functionality + Customer Integration
+// This is the COMPLETE NewSale component with Garage integration
 function NewSale({ saleType, setSaleType, setCurrentView }) {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -624,12 +624,27 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
 
+  // Garage-related states
+  const [garages, setGarages] = useState([]);
+  const [selectedGarage, setSelectedGarage] = useState(null);
+  const [showAddGarage, setShowAddGarage] = useState(false);
+  const [garageSearch, setGarageSearch] = useState('');
+  const [referredByGarage, setReferredByGarage] = useState(null);
+  const [vehicleName, setVehicleName] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [isVehicleSpecific, setIsVehicleSpecific] = useState(false);
+
   useEffect(() => {
     if (saleType) {
       fetchProducts();
       if (saleType === 'customer') {
         fetchCustomers();
       }
+      if (saleType === 'garage') {
+        fetchGarages();
+      }
+      // Always fetch garages for referral option
+      fetchGarages();
     }
   }, [saleType]);
 
@@ -644,6 +659,20 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       setCustomers(data || []);
     } catch (error) {
       console.error('Error fetching customers:', error);
+    }
+  };
+
+  const fetchGarages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('garages')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setGarages(data || []);
+    } catch (error) {
+      console.error('Error fetching garages:', error);
     }
   };
 
@@ -676,7 +705,6 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   };
 
   const addToCart = async (product) => {
-    // Fetch fresh product data to get current stock
     const { data: freshProduct } = await supabase
       .from('products')
       .select('*')
@@ -736,10 +764,17 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       totalGst += itemGst;
     });
 
+    // Calculate commission if referred by garage
+    let commission = 0;
+    if (referredByGarage) {
+      commission = (subtotal * referredByGarage.commission_rate) / 100;
+    }
+
     return {
       subtotal: subtotal.toFixed(2),
       gst: totalGst.toFixed(2),
-      total: (subtotal + totalGst).toFixed(2)
+      total: (subtotal + totalGst).toFixed(2),
+      commission: commission.toFixed(2)
     };
   };
 
@@ -751,6 +786,11 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
 
     if (saleType === 'customer' && !selectedCustomer) {
       alert('Please select a customer');
+      return;
+    }
+
+    if (saleType === 'garage' && !selectedGarage) {
+      alert('Please select a garage');
       return;
     }
 
@@ -773,6 +813,11 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
           sale_number: saleNumber,
           sale_type: saleType,
           customer_id: selectedCustomer?.id || null,
+          garage_id: selectedGarage?.id || null,
+          vehicle_name: vehicleName || null,
+          vehicle_model: vehicleModel || null,
+          referred_by_garage_id: referredByGarage?.id || null,
+          commission_amount: parseFloat(totals.commission) || 0,
           subtotal: parseFloat(totals.subtotal),
           gst_amount: parseFloat(totals.gst),
           total: totalAmount,
@@ -814,22 +859,50 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         if (updateError) throw updateError;
       }
 
-      // Update customer credit balance if applicable
+      // Update customer credit if applicable
       if (selectedCustomer && creditAmount > 0) {
         const newBalance = parseFloat(selectedCustomer.credit_balance) + creditAmount;
-        const { error: balanceError } = await supabase
+        await supabase
           .from('customers')
           .update({ credit_balance: newBalance })
           .eq('id', selectedCustomer.id);
+      }
 
-        if (balanceError) throw balanceError;
+      // Update garage credit if applicable
+      if (selectedGarage && creditAmount > 0) {
+        const newBalance = parseFloat(selectedGarage.credit_balance) + creditAmount;
+        await supabase
+          .from('garages')
+          .update({ credit_balance: newBalance })
+          .eq('id', selectedGarage.id);
+      }
+
+      // Create commission record if referred by garage
+      if (referredByGarage && parseFloat(totals.commission) > 0) {
+        await supabase
+          .from('commissions')
+          .insert([{
+            garage_id: referredByGarage.id,
+            sale_id: sale.id,
+            amount: parseFloat(totals.commission),
+            status: 'pending'
+          }]);
+
+        // Update garage's total commission owed
+        const newOwed = parseFloat(referredByGarage.total_commission_owed) + parseFloat(totals.commission);
+        await supabase
+          .from('garages')
+          .update({ total_commission_owed: newOwed })
+          .eq('id', referredByGarage.id);
       }
 
       setSaleData({
         ...sale,
         items: cart,
         totals,
-        customer: selectedCustomer
+        customer: selectedCustomer,
+        garage: selectedGarage,
+        referredBy: referredByGarage
       });
       setShowBill(true);
       
@@ -851,11 +924,16 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
     setShowBill(false);
     setSaleData(null);
     setSelectedCustomer(null);
+    setSelectedGarage(null);
+    setReferredByGarage(null);
     setCustomerSearch('');
+    setGarageSearch('');
+    setVehicleName('');
+    setVehicleModel('');
+    setIsVehicleSpecific(false);
     fetchProducts();
-    if (saleType === 'customer') {
-      fetchCustomers();
-    }
+    if (saleType === 'customer') fetchCustomers();
+    if (saleType === 'garage') fetchGarages();
   };
 
   if (!saleType) {
@@ -905,6 +983,10 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
     c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
     c.phone.includes(customerSearch)
   );
+  const filteredGarages = garages.filter(g =>
+    g.name.toLowerCase().includes(garageSearch.toLowerCase()) ||
+    g.contact_person.toLowerCase().includes(garageSearch.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -931,7 +1013,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         </div>
       </div>
 
-      {/* Customer Selection (only for customer sale type) */}
+      {/* Customer Selection */}
       {saleType === 'customer' && !selectedCustomer && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Customer</h3>
@@ -991,8 +1073,68 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         </div>
       )}
 
-      {/* Show selected customer info */}
-      {saleType === 'customer' && selectedCustomer && (
+      {/* Garage Selection */}
+      {saleType === 'garage' && !selectedGarage && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Garage</h3>
+          
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={garageSearch}
+                onChange={(e) => setGarageSearch(e.target.value)}
+                placeholder="Search garage by name..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+            {filteredGarages.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-gray-500 mb-4">No garages found</p>
+                <button
+                  onClick={() => setShowAddGarage(true)}
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  + Add New Garage
+                </button>
+              </div>
+            ) : (
+              <>
+                {filteredGarages.map(garage => (
+                  <button
+                    key={garage.id}
+                    onClick={() => setSelectedGarage(garage)}
+                    className="w-full p-4 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium text-gray-900">{garage.name}</div>
+                      <div className="text-sm text-gray-600">{garage.contact_person} | {garage.phone}</div>
+                    </div>
+                    {garage.credit_balance > 0 && (
+                      <span className="text-sm text-red-600 font-medium">
+                        Due: ₹{parseFloat(garage.credit_balance).toFixed(2)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowAddGarage(true)}
+                  className="w-full p-4 text-blue-600 hover:bg-blue-50 font-medium border-t"
+                >
+                  + Add New Garage
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Show selected customer/garage info */}
+      {selectedCustomer && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex justify-between items-center">
             <div>
@@ -1014,8 +1156,144 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         </div>
       )}
 
-      {/* Only show product search if customer is selected (for customer sales) or if it's quick sale */}
-      {(saleType === 'quick' || (saleType === 'customer' && selectedCustomer)) && (
+      {selectedGarage && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <p className="font-medium text-gray-900">Garage: {selectedGarage.name}</p>
+              <p className="text-sm text-gray-600">Contact: {selectedGarage.contact_person}</p>
+              {selectedGarage.credit_balance > 0 && (
+                <p className="text-sm text-red-600 font-medium mt-1">
+                  Outstanding: ₹{parseFloat(selectedGarage.credit_balance).toFixed(2)}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedGarage(null)}
+              className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+            >
+              Change Garage
+            </button>
+          </div>
+
+          {/* Vehicle Specific Option */}
+          <div className="mt-4 border-t border-purple-200 pt-4">
+            <label className="flex items-center gap-2 mb-3">
+              <input
+                type="checkbox"
+                checked={isVehicleSpecific}
+                onChange={(e) => setIsVehicleSpecific(e.target.checked)}
+                className="w-4 h-4 text-purple-600"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                This sale is for a specific vehicle
+              </span>
+            </label>
+
+            {isVehicleSpecific && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Vehicle Name *</label>
+                  <input
+                    type="text"
+                    value={vehicleName}
+                    onChange={(e) => setVehicleName(e.target.value)}
+                    placeholder="e.g., Maruti Swift"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Model</label>
+                  <input
+                    type="text"
+                    value={vehicleModel}
+                    onChange={(e) => setVehicleModel(e.target.value)}
+                    placeholder="e.g., VXI"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Referral by Garage (for Quick Sale and Customer Sale) */}
+      {(saleType === 'quick' || saleType === 'customer') && !referredByGarage && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Was this customer referred by a garage?</h3>
+            <span className="text-sm text-gray-500">Optional</span>
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={garageSearch}
+              onChange={(e) => setGarageSearch(e.target.value)}
+              placeholder="Search garage..."
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          {garageSearch && (
+            <div className="mt-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+              {filteredGarages.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-gray-500 text-sm">No garages found</p>
+                </div>
+              ) : (
+                filteredGarages.map(garage => (
+                  <button
+                    key={garage.id}
+                    onClick={() => {
+                      setReferredByGarage(garage);
+                      setGarageSearch('');
+                    }}
+                    className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium text-gray-900">{garage.name}</div>
+                      <div className="text-sm text-gray-600">{garage.contact_person}</div>
+                    </div>
+                    <span className="text-sm text-purple-600 font-medium">
+                      {garage.commission_rate}% commission
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Show referred garage info */}
+      {referredByGarage && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="font-medium text-gray-900">
+                Referred by: {referredByGarage.name}
+              </p>
+              <p className="text-sm text-gray-600">
+                Commission: {referredByGarage.commission_rate}% = ₹{totals.commission}
+              </p>
+            </div>
+            <button
+              onClick={() => setReferredByGarage(null)}
+              className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+            >
+              Remove Referral
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Product Search & Cart (show when ready) */}
+      {((saleType === 'quick') || 
+        (saleType === 'customer' && selectedCustomer) ||
+        (saleType === 'garage' && selectedGarage)) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-lg shadow p-6">
@@ -1131,6 +1409,12 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
                   <span>GST:</span>
                   <span>₹{totals.gst}</span>
                 </div>
+                {referredByGarage && (
+                  <div className="flex justify-between text-orange-600 text-sm">
+                    <span>Commission ({referredByGarage.commission_rate}%):</span>
+                    <span>₹{totals.commission}</span>
+                  </div>
+                )}
                 <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
                   <span>Total:</span>
                   <span>₹{totals.total}</span>
@@ -1213,6 +1497,16 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
           onSuccess={() => {
             fetchCustomers();
             setShowAddCustomer(false);
+          }}
+        />
+      )}
+
+      {showAddGarage && (
+        <AddGarageModal
+          onClose={() => setShowAddGarage(false)}
+          onSuccess={() => {
+            fetchGarages();
+            setShowAddGarage(false);
           }}
         />
       )}
@@ -2255,19 +2549,911 @@ function RecordPaymentModal({ customer, onClose, onSuccess }) {
   );
 }
 
-function Garages() {
+// Replace the Garages function in App.jsx with this complete version
+
+function Garages({ user }) {
+  const [garages, setGarages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedGarage, setSelectedGarage] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchGarages();
+  }, []);
+
+  const fetchGarages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('garages')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setGarages(data || []);
+    } catch (error) {
+      console.error('Error fetching garages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredGarages = garages.filter(g =>
+    g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    g.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    g.phone.includes(searchTerm)
+  );
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading garages...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Garages</h2>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Garage
-        </button>
+        <div className="flex gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search garages..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Garage
+          </button>
+        </div>
       </div>
-      <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
-        <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Garage management coming in Phase 2</p>
+
+      {filteredGarages.length === 0 ? (
+        <div className="text-center py-12">
+          <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchTerm ? 'No garages found' : 'No garages yet'}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {searchTerm 
+              ? 'Try a different search term'
+              : 'Start by adding your first garage partner!'}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Garage Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact Person</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commission %</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Credit Balance</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commission Owed</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredGarages.map((garage) => (
+                <tr key={garage.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{garage.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{garage.contact_person}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{garage.phone}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {garage.commission_rate}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    {garage.credit_balance > 0 ? (
+                      <span className="text-red-600 font-semibold">
+                        ₹{parseFloat(garage.credit_balance).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-green-600">₹0.00</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    {garage.total_commission_owed > 0 ? (
+                      <span className="text-orange-600 font-semibold">
+                        ₹{parseFloat(garage.total_commission_owed).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">₹0.00</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    <button
+                      onClick={() => {
+                        setSelectedGarage(garage);
+                        setShowDetailsModal(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showAddModal && (
+        <AddGarageModal 
+          onClose={() => setShowAddModal(false)} 
+          onSuccess={() => {
+            fetchGarages();
+            setShowAddModal(false);
+          }}
+        />
+      )}
+
+      {showDetailsModal && selectedGarage && (
+        <GarageDetailsModal
+          garage={selectedGarage}
+          user={user}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedGarage(null);
+            fetchGarages();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Add Garage Modal
+function AddGarageModal({ onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    commission_rate: '10'
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+    
+    if (!formData.name || !formData.contact_person || !formData.phone) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    if (formData.phone.length < 10) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: dbError } = await supabase
+        .from('garages')
+        .insert([{
+          name: formData.name,
+          contact_person: formData.contact_person,
+          phone: formData.phone,
+          commission_rate: parseFloat(formData.commission_rate),
+          total_commission_owed: 0,
+          total_commission_paid: 0,
+          credit_balance: 0
+        }]);
+
+      if (dbError) throw dbError;
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add garage');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Garage</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Garage Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., Kumar Auto Garage"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person *</label>
+            <input
+              type="text"
+              value={formData.contact_person}
+              onChange={(e) => setFormData({...formData, contact_person: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Owner/Manager name"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="10-digit phone number"
+              maxLength="10"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={formData.commission_rate}
+              onChange={(e) => setFormData({...formData, commission_rate: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="10"
+            />
+            <p className="text-xs text-gray-500 mt-1">Default: 10% - can be changed anytime</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-blue-300"
+          >
+            {loading ? 'Adding...' : 'Add Garage'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Garage Details Modal
+function GarageDetailsModal({ garage, user, onClose }) {
+  const [referralSales, setReferralSales] = useState([]);
+  const [directSales, setDirectSales] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [commissions, setCommissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('referrals');
+
+  useEffect(() => {
+    fetchGarageData();
+  }, [garage.id]);
+
+  const fetchGarageData = async () => {
+    try {
+      // Fetch referral sales (where this garage referred a customer)
+      const { data: referrals } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('referred_by_garage_id', garage.id)
+        .order('sale_date', { ascending: false });
+
+      // Fetch direct sales (where garage bought directly)
+      const { data: direct } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('garage_id', garage.id)
+        .order('sale_date', { ascending: false });
+
+      // Fetch payment history
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('payer_type', 'garage')
+        .eq('payer_id', garage.id)
+        .order('payment_date', { ascending: false });
+
+      // Fetch commission records
+      const { data: commissionsData } = await supabase
+        .from('commissions')
+        .select('*, sales(sale_number, sale_date)')
+        .eq('garage_id', garage.id)
+        .order('created_at', { ascending: false });
+
+      setReferralSales(referrals || []);
+      setDirectSales(direct || []);
+      setPayments(paymentsData || []);
+      setCommissions(commissionsData || []);
+    } catch (error) {
+      console.error('Error fetching garage data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pendingCommission = commissions
+    .filter(c => c.status === 'pending')
+    .reduce((sum, c) => sum + parseFloat(c.amount), 0);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b sticky top-0 bg-white z-10">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">{garage.name}</h3>
+              <p className="text-gray-600 mt-1">Contact: {garage.contact_person} | {garage.phone}</p>
+              <span className="inline-block mt-2 px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                Commission: {garage.commission_rate}%
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div className="p-4 bg-red-50 rounded-lg">
+              <p className="text-sm text-red-900">Credit Balance (Direct Purchases)</p>
+              <p className="text-2xl font-bold text-red-600">
+                ₹{parseFloat(garage.credit_balance).toFixed(2)}
+              </p>
+              {garage.credit_balance > 0 && (
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="mt-2 text-sm text-red-700 hover:text-red-800 font-medium"
+                >
+                  Record Payment →
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 bg-orange-50 rounded-lg">
+              <p className="text-sm text-orange-900">Commission Pending</p>
+              <p className="text-2xl font-bold text-orange-600">
+                ₹{pendingCommission.toFixed(2)}
+              </p>
+              {pendingCommission > 0 && user.role === 'admin' && (
+                <button
+                  onClick={() => setShowCommissionModal(true)}
+                  className="mt-2 text-sm text-orange-700 hover:text-orange-800 font-medium"
+                >
+                  Pay Commission →
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-900">Commission Paid (Total)</p>
+              <p className="text-2xl font-bold text-green-600">
+                ₹{parseFloat(garage.total_commission_paid).toFixed(2)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b">
+          <div className="flex px-6 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('referrals')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'referrals'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Referral Sales ({referralSales.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('direct')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'direct'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Direct Purchases ({directSales.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'payments'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Credit Payments ({payments.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('commissions')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'commissions'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Commissions ({commissions.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'referrals' && (
+                <div className="space-y-3">
+                  {referralSales.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">No referral sales yet</p>
+                  ) : (
+                    referralSales.map(sale => (
+                      <div key={sale.id} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">Sale #{sale.sale_number}</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {new Date(sale.sale_date).toLocaleDateString('en-IN')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-gray-900">₹{parseFloat(sale.total).toFixed(2)}</p>
+                            <p className="text-sm text-orange-600 font-medium">
+                              Commission: ₹{parseFloat(sale.commission_amount || 0).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'direct' && (
+                <div className="space-y-3">
+                  {directSales.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">No direct purchases yet</p>
+                  ) : (
+                    directSales.map(sale => (
+                      <div key={sale.id} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">Sale #{sale.sale_number}</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {new Date(sale.sale_date).toLocaleDateString('en-IN')}
+                            </p>
+                            {sale.vehicle_name && (
+                              <p className="text-sm text-blue-600 mt-1">
+                                Vehicle: {sale.vehicle_name} {sale.vehicle_model}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-gray-900">₹{parseFloat(sale.total).toFixed(2)}</p>
+                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
+                              sale.payment_status === 'paid' 
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {sale.payment_status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'payments' && (
+                <div className="space-y-3">
+                  {payments.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">No payments yet</p>
+                  ) : (
+                    payments.map(payment => (
+                      <div key={payment.id} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">₹{parseFloat(payment.amount).toFixed(2)}</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {new Date(payment.payment_date).toLocaleDateString('en-IN')}
+                            </p>
+                            <span className="text-xs text-gray-500 capitalize">{payment.payment_mode}</span>
+                          </div>
+                          {payment.notes && (
+                            <p className="text-sm text-gray-600 italic max-w-xs">{payment.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'commissions' && (
+                <div className="space-y-3">
+                  {commissions.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">No commission records yet</p>
+                  ) : (
+                    commissions.map(comm => (
+                      <div key={comm.id} className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              Sale #{comm.sales?.sale_number || 'N/A'}
+                            </p>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {comm.sales?.sale_date && new Date(comm.sales.sale_date).toLocaleDateString('en-IN')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-orange-600">₹{parseFloat(comm.amount).toFixed(2)}</p>
+                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
+                              comm.status === 'paid'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {comm.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {showPaymentModal && (
+          <RecordGaragePaymentModal
+            garage={garage}
+            onClose={() => setShowPaymentModal(false)}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              fetchGarageData();
+            }}
+          />
+        )}
+
+        {showCommissionModal && (
+          <PayCommissionModal
+            garage={garage}
+            pendingCommissions={commissions.filter(c => c.status === 'pending')}
+            onClose={() => setShowCommissionModal(false)}
+            onSuccess={() => {
+              setShowCommissionModal(false);
+              fetchGarageData();
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Record Garage Payment Modal (for credit purchases)
+function RecordGaragePaymentModal({ garage, onClose, onSuccess }) {
+  const [amount, setAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState('cash');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+
+    const paymentAmount = parseFloat(amount);
+    if (!amount || paymentAmount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (paymentAmount > garage.credit_balance) {
+      setError('Payment amount cannot exceed credit balance');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert([{
+          payer_type: 'garage',
+          payer_id: garage.id,
+          amount: paymentAmount,
+          payment_mode: paymentMode,
+          notes: notes || null
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      const newBalance = garage.credit_balance - paymentAmount;
+      const { error: updateError } = await supabase
+        .from('garages')
+        .update({ credit_balance: newBalance })
+        .eq('id', garage.id);
+
+      if (updateError) throw updateError;
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to record payment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Record Credit Payment</h3>
+        
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-600">Outstanding Credit Balance</p>
+          <p className="text-2xl font-bold text-red-600">
+            ₹{parseFloat(garage.credit_balance).toFixed(2)}
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Enter amount"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+            <select
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="cash">Cash</option>
+              <option value="upi">UPI/Google Pay</option>
+              <option value="card">Card</option>
+              <option value="bank_transfer">Bank Transfer</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="2"
+              placeholder="Add any notes..."
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-green-300"
+          >
+            {loading ? 'Recording...' : 'Record Payment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Pay Commission Modal
+function PayCommissionModal({ garage, pendingCommissions, onClose, onSuccess }) {
+  const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const totalPending = pendingCommissions.reduce((sum, c) => sum + parseFloat(c.amount), 0);
+
+  const handleSubmit = async () => {
+    setError('');
+
+    const paymentAmount = parseFloat(amount);
+    if (!amount || paymentAmount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (paymentAmount > totalPending) {
+      setError('Payment amount cannot exceed pending commission');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      let remaining = paymentAmount;
+      const paidCommissionIds = [];
+
+      for (const comm of pendingCommissions) {
+        if (remaining <= 0) break;
+
+        const commAmount = parseFloat(comm.amount);
+        if (remaining >= commAmount) {
+          await supabase
+            .from('commissions')
+            .update({ status: 'paid' })
+            .eq('id', comm.id);
+          
+          paidCommissionIds.push(comm.id);
+          remaining -= commAmount;
+        }
+      }
+
+      const { error: paymentError } = await supabase
+        .from('commission_payments')
+        .insert([{
+          garage_id: garage.id,
+          amount: paymentAmount,
+          commission_ids: paidCommissionIds,
+          notes: notes || null
+        }]);
+
+      if (paymentError) throw paymentError;
+
+      const newOwed = garage.total_commission_owed - paymentAmount;
+      const newPaid = parseFloat(garage.total_commission_paid) + paymentAmount;
+
+      const { error: updateError } = await supabase
+        .from('garages')
+        .update({ 
+          total_commission_owed: Math.max(0, newOwed),
+          total_commission_paid: newPaid
+        })
+        .eq('id', garage.id);
+
+      if (updateError) throw updateError;
+
+      const { error: expenseError } = await supabase
+        .from('expenses')
+        .insert([{
+          category: 'commission',
+          amount: paymentAmount,
+          description: `Commission payment to ${garage.name}`,
+          expense_date: new Date().toISOString().split('T')[0]
+        }]);
+
+      if (expenseError) console.error('Failed to record expense:', expenseError);
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to pay commission');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Pay Commission</h3>
+        
+        <div className="mb-4 p-4 bg-orange-50 rounded-lg">
+          <p className="text-sm text-orange-900">Total Pending Commission</p>
+          <p className="text-2xl font-bold text-orange-600">
+            ₹{totalPending.toFixed(2)}
+          </p>
+          <p className="text-xs text-orange-700 mt-1">
+            From {pendingCommissions.length} referral sales
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Amount to Pay *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Enter amount"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Can pay partial amount. Oldest sales will be marked as paid first.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="2"
+              placeholder="Add any notes..."
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium disabled:bg-orange-300"
+          >
+            {loading ? 'Processing...' : 'Pay Commission'}
+          </button>
+        </div>
       </div>
     </div>
   );

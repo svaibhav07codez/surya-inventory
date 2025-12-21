@@ -128,7 +128,7 @@ function LoginPage({ setUser }) {
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <Package className="h-12 w-12 text-blue-600 mx-auto mb-2" />
-          <h1 className="text-2xl font-bold text-gray-900">Surya's Auto Parts</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Surya Automobiles</h1>
           <p className="text-gray-600 mt-1">Inventory Management System</p>
         </div>
 
@@ -219,7 +219,7 @@ function Navigation({ user, currentView, setCurrentView, handleLogout }) {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Package className="h-8 w-8 text-blue-600" />
-            <span className="ml-2 text-xl font-semibold text-gray-900">Surya's Auto Parts</span>
+            <span className="ml-2 text-xl font-semibold text-gray-900">Surya Automobiles</span>
           </div>
 
           <div className="hidden md:flex items-center space-x-1">
@@ -480,6 +480,7 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
             </button>
           </div>
         </div>
+        <PendingPaymentsWidget user={user} />
       </div>
     );
   }
@@ -562,23 +563,7 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
           <p className="text-sm text-purple-100">Analyze business data</p>
         </button>
       </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">🎉 Sales System Now Live!</h2>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-green-900 font-medium">✓ Product Management</span>
-            <span className="text-xs text-green-700">Working</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-green-900 font-medium">✓ Sales System</span>
-            <span className="text-xs text-green-700">New!</span>
-          </div>
-          <p className="text-sm text-gray-600 pt-3">
-            Create sales, generate bills, and manage inventory in real-time!
-          </p>
-        </div>
-      </div>
+      <PendingPaymentsWidget user={user} />
     </div>
   );
 }
@@ -1659,6 +1644,9 @@ function Products({ user }) {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showQuickStockModal, setShowQuickStockModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -1749,12 +1737,15 @@ function Products({ user }) {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GST %</th>
+                {user.role === 'admin' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.sku}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.sku || '-'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{product.name}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{product.category}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">₹{product.selling_price}</td>
@@ -1768,11 +1759,67 @@ function Products({ user }) {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">{product.gst_rate}%</td>
+                  {user.role === 'admin' && (
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setShowEditModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Edit Product"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setShowQuickStockModal(true);
+                          }}
+                          className="text-green-600 hover:text-green-700"
+                          title="Add Stock"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {showEditModal && selectedProduct && (
+        <EditProductModal
+          product={selectedProduct}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedProduct(null);
+          }}
+          onSuccess={() => {
+            fetchProducts();
+            setShowEditModal(false);
+            setSelectedProduct(null);
+          }}
+        />
+      )}
+
+      {showQuickStockModal && selectedProduct && (
+        <QuickAddStockModal
+          product={selectedProduct}
+          onClose={() => {
+            setShowQuickStockModal(false);
+            setSelectedProduct(null);
+          }}
+          onSuccess={() => {
+            fetchProducts();
+            setShowQuickStockModal(false);
+            setSelectedProduct(null);
+          }}
+        />
       )}
 
       {showAddModal && (
@@ -1795,7 +1842,7 @@ function AddProductModal({ onClose, onSuccess }) {
     category: '',
     purchase_price: '',
     selling_price: '',
-    gst_rate: '18',
+    gst_rate: '0',
     current_quantity: '',
     minimum_quantity: ''
   });
@@ -1805,7 +1852,7 @@ function AddProductModal({ onClose, onSuccess }) {
   const handleSubmit = async () => {
     setError('');
     
-    if (!formData.sku || !formData.name || !formData.category || !formData.purchase_price || 
+    if (!formData.name || !formData.category || !formData.purchase_price || 
         !formData.selling_price || !formData.current_quantity || !formData.minimum_quantity) {
       setError('Please fill all required fields');
       return;
@@ -1841,7 +1888,7 @@ function AddProductModal({ onClose, onSuccess }) {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Optional)</label>
             <input
               type="text"
               value={formData.sku}
@@ -3471,19 +3518,1072 @@ function Reports() {
   );
 }
 
-function Expenses() {
+// Replace the Expenses function in App.jsx with this complete version
+
+function Expenses({ user }) {
+  const [expenses, setExpenses] = useState([]);
+  const [stockPurchases, setStockPurchases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('expenses');
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+
+  useEffect(() => {
+    fetchData();
+  }, [filterMonth]);
+
+  const fetchData = async () => {
+    try {
+      // Fetch expenses for selected month
+      const monthStart = `${filterMonth}-01`;
+      const monthEnd = new Date(filterMonth + '-01');
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+      
+      const { data: expensesData } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('expense_date', monthStart)
+        .lt('expense_date', monthEnd.toISOString().split('T')[0])
+        .order('expense_date', { ascending: false });
+
+      // Fetch stock purchases for selected month
+      const { data: stockData } = await supabase
+        .from('stock_purchases')
+        .select('*, products(name, sku)')
+        .gte('purchase_date', monthStart)
+        .lt('purchase_date', monthEnd.toISOString().split('T')[0])
+        .order('purchase_date', { ascending: false });
+
+      setExpenses(expensesData || []);
+      setStockPurchases(stockData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+  const totalStockCost = stockPurchases.reduce((sum, s) => sum + parseFloat(s.total_cost), 0);
+  const grandTotal = totalExpenses + totalStockCost;
+
+  const expensesByCategory = expenses.reduce((acc, exp) => {
+    acc[exp.category] = (acc[exp.category] || 0) + parseFloat(exp.amount);
+    return acc;
+  }, {});
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading expenses...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header with Month Filter */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">Expenses & Stock Purchases</h2>
+          <div className="flex gap-3 items-center">
+            <div>
+              <label className="text-sm text-gray-600 mr-2">Filter by Month:</label>
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <button 
+              onClick={() => setShowAddExpenseModal(true)}
+              className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Expense
+            </button>
+            <button 
+              onClick={() => setShowAddStockModal(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Stock Purchase
+            </button>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <p className="text-sm text-orange-900">Monthly Expenses</p>
+            <p className="text-2xl font-bold text-orange-600">₹{totalExpenses.toFixed(2)}</p>
+            <p className="text-xs text-orange-700 mt-1">{expenses.length} transactions</p>
+          </div>
+          <div className="p-4 bg-green-50 rounded-lg">
+            <p className="text-sm text-green-900">Stock Purchases</p>
+            <p className="text-2xl font-bold text-green-600">₹{totalStockCost.toFixed(2)}</p>
+            <p className="text-xs text-green-700 mt-1">{stockPurchases.length} purchases</p>
+          </div>
+          <div className="p-4 bg-red-50 rounded-lg">
+            <p className="text-sm text-red-900">Total Outflow</p>
+            <p className="text-2xl font-bold text-red-600">₹{grandTotal.toFixed(2)}</p>
+            <p className="text-xs text-red-700 mt-1">This month</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Expense Breakdown by Category */}
+      {Object.keys(expensesByCategory).length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Expense Breakdown</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {Object.entries(expensesByCategory).map(([category, amount]) => (
+              <div key={category} className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-600 capitalize">{category.replace('_', ' ')}</p>
+                <p className="text-lg font-semibold text-gray-900">₹{amount.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="border-b">
+          <div className="flex px-6">
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+                activeTab === 'expenses'
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Monthly Expenses ({expenses.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('stock')}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+                activeTab === 'stock'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Stock Purchases ({stockPurchases.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'expenses' && (
+            <div>
+              {expenses.length === 0 ? (
+                <div className="text-center py-12">
+                  <DollarSign className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No expenses recorded for this month</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {expenses.map(expense => (
+                    <div key={expense.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 capitalize">
+                              {expense.category.replace('_', ' ')}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {new Date(expense.expense_date).toLocaleDateString('en-IN')}
+                            </span>
+                          </div>
+                          {expense.description && (
+                            <p className="text-sm text-gray-700 mt-2">{expense.description}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-gray-900">₹{parseFloat(expense.amount).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'stock' && (
+            <div>
+              {stockPurchases.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No stock purchases recorded for this month</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {stockPurchases.map(purchase => (
+                    <div key={purchase.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">
+                            {purchase.products?.name || 'Unknown Product'}
+                          </p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            SKU: {purchase.products?.sku} | Quantity: {purchase.quantity}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {new Date(purchase.purchase_date).toLocaleDateString('en-IN')} | 
+                            ₹{parseFloat(purchase.purchase_price).toFixed(2)} per unit
+                          </p>
+                          {purchase.notes && (
+                            <p className="text-sm text-gray-500 mt-1 italic">{purchase.notes}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-gray-900">₹{parseFloat(purchase.total_cost).toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">Total Cost</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showAddExpenseModal && (
+        <AddExpenseModal
+          onClose={() => setShowAddExpenseModal(false)}
+          onSuccess={() => {
+            fetchData();
+            setShowAddExpenseModal(false);
+          }}
+        />
+      )}
+
+      {showAddStockModal && (
+        <AddStockPurchaseModal
+          onClose={() => setShowAddStockModal(false)}
+          onSuccess={() => {
+            fetchData();
+            setShowAddStockModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Add Expense Modal
+function AddExpenseModal({ onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    category: 'rent',
+    amount: '',
+    description: '',
+    expense_date: new Date().toISOString().split('T')[0]
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+    
+    if (!formData.amount || !formData.expense_date) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: dbError } = await supabase
+        .from('expenses')
+        .insert([{
+          category: formData.category,
+          amount: parseFloat(formData.amount),
+          description: formData.description || null,
+          expense_date: formData.expense_date
+        }]);
+
+      if (dbError) throw dbError;
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add expense');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add Expense</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="rent">Rent</option>
+              <option value="electricity">Electricity</option>
+              <option value="salary">Salary</option>
+              <option value="commission">Commission</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.amount}
+              onChange={(e) => setFormData({...formData, amount: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Enter amount"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+            <input
+              type="date"
+              value={formData.expense_date}
+              onChange={(e) => setFormData({...formData, expense_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="3"
+              placeholder="Add details about this expense..."
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium disabled:bg-orange-300"
+          >
+            {loading ? 'Adding...' : 'Add Expense'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Add Stock Purchase Modal
+function AddStockPurchaseModal({ onClose, onSuccess }) {
+  const [products, setProducts] = useState([]);
+  const [formData, setFormData] = useState({
+    product_id: '',
+    quantity: '',
+    purchase_price: '',
+    purchase_date: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  const selectedProduct = products.find(p => p.id === formData.product_id);
+  const totalCost = formData.quantity && formData.purchase_price 
+    ? (parseFloat(formData.quantity) * parseFloat(formData.purchase_price)).toFixed(2)
+    : '0.00';
+
+  const handleSubmit = async () => {
+    setError('');
+    
+    if (!formData.product_id || !formData.quantity || !formData.purchase_price || !formData.purchase_date) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const quantity = parseInt(formData.quantity);
+      const purchasePrice = parseFloat(formData.purchase_price);
+      const totalCost = quantity * purchasePrice;
+
+      // Add stock purchase record
+      const { error: purchaseError } = await supabase
+        .from('stock_purchases')
+        .insert([{
+          product_id: formData.product_id,
+          quantity: quantity,
+          purchase_price: purchasePrice,
+          total_cost: totalCost,
+          purchase_date: formData.purchase_date,
+          notes: formData.notes || null
+        }]);
+
+      if (purchaseError) throw purchaseError;
+
+      // Update product quantity
+      const currentQty = selectedProduct.current_quantity;
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          current_quantity: currentQty + quantity,
+          purchase_price: purchasePrice  // Update latest purchase price
+        })
+        .eq('id', formData.product_id);
+
+      if (updateError) throw updateError;
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add stock purchase');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProducts = products.filter(p =>
+    p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add Stock Purchase</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Select Product *</label>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by SKU or name..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            
+            {searchTerm && (
+              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg mb-2">
+                {filteredProducts.map(product => (
+                  <button
+                    key={product.id}
+                    onClick={() => {
+                      setFormData({...formData, product_id: product.id});
+                      setSearchTerm('');
+                    }}
+                    className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0 text-left"
+                  >
+                    <div>
+                      <div className="font-medium text-gray-900">{product.name}</div>
+                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {product.current_quantity}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedProduct && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="font-medium text-blue-900">{selectedProduct.name}</p>
+                <p className="text-sm text-blue-700">SKU: {selectedProduct.sku} | Current Stock: {selectedProduct.current_quantity}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
+              <input
+                type="number"
+                value={formData.quantity}
+                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Enter quantity"
+                disabled={!formData.product_id}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price (per unit) *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.purchase_price}
+                onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Price per unit"
+                disabled={!formData.product_id}
+              />
+            </div>
+          </div>
+
+          {totalCost !== '0.00' && (
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-900">Total Cost</p>
+              <p className="text-2xl font-bold text-green-600">₹{totalCost}</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date *</label>
+            <input
+              type="date"
+              value={formData.purchase_date}
+              onChange={(e) => setFormData({...formData, purchase_date: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="2"
+              placeholder="Supplier, invoice number, etc..."
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !formData.product_id}
+            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-green-300"
+          >
+            {loading ? 'Adding...' : 'Add Stock Purchase'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Pending Payments Widget
+function PendingPaymentsWidget({ user }) {
+  const [customers, setCustomers] = useState([]);
+  const [garages, setGarages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPayer, setSelectedPayer] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  useEffect(() => {
+    fetchPendingPayments();
+  }, []);
+
+  const fetchPendingPayments = async () => {
+    try {
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .gt('credit_balance', 0)
+        .order('credit_balance', { ascending: false });
+
+      const { data: garagesData } = await supabase
+        .from('garages')
+        .select('*')
+        .gt('credit_balance', 0)
+        .order('credit_balance', { ascending: false });
+
+      setCustomers(customersData || []);
+      setGarages(garagesData || []);
+    } catch (error) {
+      console.error('Error fetching pending payments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-4">Loading...</div>;
+  }
+
+  const totalPending = customers.length + garages.length;
+
+  if (totalPending === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Payments</h3>
+        <div className="text-center py-8">
+          <p className="text-green-600 font-medium">✓ All payments collected!</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Expenses</h2>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Expense
-        </button>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        Pending Payments ({totalPending})
+      </h3>
+
+      {garages.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Garages with Credit</h4>
+          <div className="space-y-2">
+            {garages.slice(0, 5).map(garage => (
+              <div key={garage.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                <div>
+                  <p className="font-medium text-gray-900">{garage.name}</p>
+                  <p className="text-xs text-gray-600">{garage.contact_person}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-red-600">
+                    ₹{parseFloat(garage.credit_balance).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedPayer({ ...garage, type: 'garage' });
+                      setShowPaymentModal(true);
+                    }}
+                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                  >
+                    Collect
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {customers.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Customers with Credit</h4>
+          <div className="space-y-2">
+            {customers.slice(0, 5).map(customer => (
+              <div key={customer.id} className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
+                <div>
+                  <p className="font-medium text-gray-900">{customer.name}</p>
+                  <p className="text-xs text-gray-600">{customer.phone}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-red-600">
+                    ₹{parseFloat(customer.credit_balance).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedPayer({ ...customer, type: 'customer' });
+                      setShowPaymentModal(true);
+                    }}
+                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                  >
+                    Collect
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && selectedPayer && (
+        selectedPayer.type === 'garage' ? (
+          <RecordGaragePaymentModal
+            garage={selectedPayer}
+            onClose={() => {
+              setShowPaymentModal(false);
+              setSelectedPayer(null);
+            }}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              setSelectedPayer(null);
+              fetchPendingPayments();
+            }}
+          />
+        ) : (
+          <RecordPaymentModal
+            customer={selectedPayer}
+            onClose={() => {
+              setShowPaymentModal(false);
+              setSelectedPayer(null);
+            }}
+            onSuccess={() => {
+              setShowPaymentModal(false);
+              setSelectedPayer(null);
+              fetchPendingPayments();
+            }}
+          />
+        )
+      )}
+    </div>
+  );
+}
+
+// Edit Product Modal
+function EditProductModal({ product, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    sku: product.sku || '',
+    name: product.name,
+    category: product.category,
+    purchase_price: product.purchase_price,
+    selling_price: product.selling_price,
+    gst_rate: product.gst_rate,
+    minimum_quantity: product.minimum_quantity
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+    
+    if (!formData.name || !formData.category || !formData.purchase_price || 
+        !formData.selling_price || !formData.minimum_quantity) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: dbError } = await supabase
+        .from('products')
+        .update({
+          sku: formData.sku || null,
+          name: formData.name,
+          category: formData.category,
+          purchase_price: parseFloat(formData.purchase_price),
+          selling_price: parseFloat(formData.selling_price),
+          gst_rate: parseFloat(formData.gst_rate),
+          minimum_quantity: parseInt(formData.minimum_quantity)
+        })
+        .eq('id', product.id);
+
+      if (dbError) throw dbError;
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to update product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Product</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Optional)</label>
+            <input
+              type="text"
+              value={formData.sku}
+              onChange={(e) => setFormData({...formData, sku: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., BAT001"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., Exide Battery 12V"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+            <input
+              type="text"
+              value={formData.category}
+              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g., Batteries"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.purchase_price}
+              onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="3500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.selling_price}
+              onChange={(e) => setFormData({...formData, selling_price: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="4200"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate (%) *</label>
+            <select
+              value={formData.gst_rate}
+              onChange={(e) => setFormData({...formData, gst_rate: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="0">0%</option>
+              <option value="5">5%</option>
+              <option value="12">12%</option>
+              <option value="18">18%</option>
+              <option value="28">28%</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Quantity *</label>
+            <input
+              type="number"
+              value={formData.minimum_quantity}
+              onChange={(e) => setFormData({...formData, minimum_quantity: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="10"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
+            <input
+              type="number"
+              value={product.current_quantity}
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+            />
+            <p className="text-xs text-gray-500 mt-1">Use "Add Stock" button to update</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-blue-300"
+          >
+            {loading ? 'Updating...' : 'Update Product'}
+          </button>
+        </div>
       </div>
-      <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
-        <DollarSign className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Expense tracking coming in Phase 6</p>
+    </div>
+  );
+}
+
+// Quick Add Stock Modal
+function QuickAddStockModal({ product, onClose, onSuccess }) {
+  const [quantity, setQuantity] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState(product.purchase_price);
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const totalCost = quantity && purchasePrice 
+    ? (parseFloat(quantity) * parseFloat(purchasePrice)).toFixed(2)
+    : '0.00';
+
+  const handleSubmit = async () => {
+    setError('');
+    
+    if (!quantity || !purchasePrice) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const qty = parseInt(quantity);
+      const price = parseFloat(purchasePrice);
+      const total = qty * price;
+
+      const { error: purchaseError } = await supabase
+        .from('stock_purchases')
+        .insert([{
+          product_id: product.id,
+          quantity: qty,
+          purchase_price: price,
+          total_cost: total,
+          purchase_date: new Date().toISOString().split('T')[0],
+          notes: notes || null
+        }]);
+
+      if (purchaseError) throw purchaseError;
+
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ 
+          current_quantity: product.current_quantity + qty,
+          purchase_price: price
+        })
+        .eq('id', product.id);
+
+      if (updateError) throw updateError;
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add stock');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add Stock</h3>
+        
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+          <p className="font-medium text-blue-900">{product.name}</p>
+          <p className="text-sm text-blue-700">SKU: {product.sku || 'N/A'} | Current Stock: {product.current_quantity}</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quantity to Add *</label>
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Enter quantity"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price (per unit) *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={purchasePrice}
+              onChange={(e) => setPurchasePrice(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Price per unit"
+            />
+          </div>
+
+          {totalCost !== '0.00' && (
+            <div className="p-4 bg-green-50 rounded-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-green-900">Total Cost</p>
+                  <p className="text-xs text-green-700">New Stock: {product.current_quantity + parseInt(quantity || 0)}</p>
+                </div>
+                <p className="text-2xl font-bold text-green-600">₹{totalCost}</p>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="2"
+              placeholder="Supplier, invoice number, etc..."
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-green-300"
+          >
+            {loading ? 'Adding...' : 'Add Stock'}
+          </button>
+        </div>
       </div>
     </div>
   );

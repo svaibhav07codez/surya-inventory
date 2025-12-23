@@ -184,14 +184,6 @@ function LoginPage({ setUser }) {
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </div>
-
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <p className="text-xs font-semibold text-blue-900 mb-2">Default Admin Credentials:</p>
-          <div className="text-xs text-blue-700">
-            <p>Username: <strong>admin</strong></p>
-            <p>Password: <strong>admin123</strong></p>
-          </div>
-        </div>
       </div>
     </div>
   );

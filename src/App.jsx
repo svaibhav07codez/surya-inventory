@@ -343,15 +343,19 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
 
   const fetchDashboardStats = async () => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayISO = today.toISOString();
+      const today = new Date().toISOString().split('T')[0]; // Just date, no time
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowDate = tomorrow.toISOString().split('T')[0];
 
       // Fetch today's sales
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('total, sale_date')
-        .gte('sale_date', todayISO);
+        .gte('sale_date', today)
+        .lt('sale_date', tomorrowDate);
+      
+      console.log('Fetching sales for:', today, 'Found:', salesData);
 
       if (salesError) {
         console.error('Sales error:', salesError);
@@ -374,12 +378,27 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
       console.log('Today sales:', salesData);
       console.log('Low stock products:', lowStockProducts);
 
+      // Fetch customers with pending payments
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('credit_balance')
+        .gt('credit_balance', 0);
+
+      // Fetch garages with pending credit
+      const { data: garagesData } = await supabase
+        .from('garages')
+        .select('credit_balance')
+        .gt('credit_balance', 0);
+
+      const totalCustomerOutstanding = customersData?.reduce((sum, c) => sum + parseFloat(c.credit_balance), 0) || 0;
+      const totalGarageOutstanding = garagesData?.reduce((sum, g) => sum + parseFloat(g.credit_balance), 0) || 0;
+
       setStats({
         todaySales: salesData?.length || 0,
         todayAmount: salesData?.reduce((sum, s) => sum + parseFloat(s.total), 0) || 0,
         lowStockCount: lowStockProducts.length,
-        pendingPayments: 0,
-        totalOutstanding: 0
+        pendingPayments: (customersData?.length || 0) + (garagesData?.length || 0),
+        totalOutstanding: totalCustomerOutstanding + totalGarageOutstanding
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -3506,13 +3525,734 @@ function PayCommissionModal({ garage, pendingCommissions, onClose, onSuccess }) 
   );
 }
 
-function Reports() {
+// Replace the Reports function in App.jsx with this complete version
+
+function Reports({ user }) {
+  const [activeReport, setActiveReport] = useState('sales');
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().setDate(1)).toISOString().split('T')[0], // First day of month
+    end: new Date().toISOString().split('T')[0] // Today
+  });
+  const [loading, setLoading] = useState(false);
+  const [reportData, setReportData] = useState(null);
+
+  useEffect(() => {  
+    if (activeReport) {
+      fetchReportData();
+    }
+  }, [activeReport, dateRange]);
+
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      switch (activeReport) {
+        case 'sales':
+          await fetchSalesReport();
+          break;
+        case 'profit':
+          await fetchProfitReport();
+          break;
+        case 'outstanding':
+          await fetchOutstandingReport();
+          break;
+        case 'products':
+          await fetchProductsReport();
+          break;
+        case 'commission':
+          await fetchCommissionReport();
+          break;
+      }
+    } catch (error) {
+      console.error('Error fetching report:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+   const fetchSalesReport = async () => {
+    const { data: sales, error } = await supabase
+      .from('sales')
+      .select(`
+        *, 
+        sale_items(*), 
+        customers(name),
+        direct_garage:garages!sales_garage_id_fkey(name),
+        referral_garage:garages!sales_referred_by_garage_id_fkey(name)
+      `)
+      .gte('sale_date', dateRange.start)
+      .lt('sale_date', (() => {
+        const nextDay = new Date(dateRange.end);
+        nextDay.setDate(nextDay.getDate() + 1);
+        return nextDay.toISOString().split('T')[0];
+      })())
+      .order('sale_date', { ascending: false });
+
+    console.log('Date range:', dateRange);
+    console.log('Sales query error:', error);
+    console.log('Sales found for reports:', sales);
+
+    const totalSales = sales?.reduce((sum, s) => sum + parseFloat(s.total), 0) || 0;
+    const totalGST = sales?.reduce((sum, s) => sum + parseFloat(s.gst_amount), 0) || 0;
+    const paidSales = sales?.filter(s => s.payment_status === 'paid').length || 0;
+    const creditSales = sales?.filter(s => s.payment_status === 'credit' || s.payment_status === 'partial').length || 0;
+
+    setReportData({
+      sales: sales || [],
+      summary: {
+        totalSales: sales?.length || 0,
+        totalAmount: totalSales,
+        totalGST: totalGST,
+        paidCount: paidSales,
+        creditCount: creditSales
+      }
+    });
+  };
+
+  const fetchProfitReport = async () => {
+    const startDate = dateRange.start;
+    const nextDay = new Date(dateRange.end);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endDate = nextDay.toISOString().split('T')[0];
+
+    // Fetch sales
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('total, subtotal, gst_amount')
+      .gte('sale_date', startDate)
+      .lt('sale_date', endDate);
+
+    // Fetch expenses
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('amount')
+      .gte('expense_date', startDate)
+      .lt('expense_date', endDate);
+
+    // Fetch stock purchases
+    const { data: stockPurchases } = await supabase
+      .from('stock_purchases')
+      .select('total_cost')
+      .gte('purchase_date', startDate)
+      .lt('purchase_date', endDate);
+
+    console.log('Profit report - Sales:', sales, 'Expenses:', expenses, 'Stock:', stockPurchases);
+
+    const revenue = sales?.reduce((sum, s) => sum + parseFloat(s.subtotal), 0) || 0;
+    const totalExpenses = expenses?.reduce((sum, e) => sum + parseFloat(e.amount), 0) || 0;
+    const totalStockCost = stockPurchases?.reduce((sum, s) => sum + parseFloat(s.total_cost), 0) || 0;
+    const totalCost = totalExpenses + totalStockCost;
+    const profit = revenue - totalCost;
+
+    setReportData({
+      revenue,
+      expenses: totalExpenses,
+      stockCost: totalStockCost,
+      totalCost,
+      profit,
+      profitMargin: revenue > 0 ? ((profit / revenue) * 100).toFixed(2) : 0
+    });
+  };
+
+  const fetchOutstandingReport = async () => {
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('*')
+      .gt('credit_balance', 0)
+      .order('credit_balance', { ascending: false });
+
+    const { data: garages } = await supabase
+      .from('garages')
+      .select('*')
+      .gt('credit_balance', 0)
+      .order('credit_balance', { ascending: false });
+
+    const totalCustomer = customers?.reduce((sum, c) => sum + parseFloat(c.credit_balance), 0) || 0;
+    const totalGarage = garages?.reduce((sum, g) => sum + parseFloat(g.credit_balance), 0) || 0;
+
+    setReportData({
+      customers: customers || [],
+      garages: garages || [],
+      totalCustomer,
+      totalGarage,
+      grandTotal: totalCustomer + totalGarage
+    });
+  };
+
+  const fetchProductsReport = async () => {
+    const startDate = dateRange.start;
+    const nextDay = new Date(dateRange.end);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endDate = nextDay.toISOString().split('T')[0];
+
+    // Fetch all products
+    const { data: products } = await supabase
+      .from('products')
+      .select('*')
+      .order('current_quantity', { ascending: true });
+
+    // Fetch sale items in date range with sales info
+    const { data: salesWithItems } = await supabase
+      .from('sales')
+      .select('id, sale_date, sale_items(product_id, quantity, total)')
+      .gte('sale_date', startDate)
+      .lt('sale_date', endDate);
+
+    // Flatten sale items
+    const saleItems = [];
+    salesWithItems?.forEach(sale => {
+      sale.sale_items?.forEach(item => {
+        saleItems.push(item);
+      });
+    });
+
+    // Calculate sales per product
+    const productSales = {};
+    saleItems.forEach(item => {
+      if (!productSales[item.product_id]) {
+        productSales[item.product_id] = { quantity: 0, revenue: 0 };
+      }
+      productSales[item.product_id].quantity += item.quantity;
+      productSales[item.product_id].revenue += parseFloat(item.total);
+    });
+
+    // Merge with products
+    const enrichedProducts = products?.map(p => ({
+      ...p,
+      soldQuantity: productSales[p.id]?.quantity || 0,
+      revenue: productSales[p.id]?.revenue || 0,
+      stockValue: p.current_quantity * p.purchase_price
+    })) || [];
+
+    // Sort by sold quantity
+    const bestSelling = [...enrichedProducts].sort((a, b) => b.soldQuantity - a.soldQuantity);
+    const lowStock = enrichedProducts.filter(p => p.current_quantity <= p.minimum_quantity);
+
+    setReportData({
+      allProducts: enrichedProducts,
+      bestSelling: bestSelling.slice(0, 10),
+      lowStock,
+      totalStockValue: enrichedProducts.reduce((sum, p) => sum + p.stockValue, 0)
+    });
+  };
+
+  const fetchCommissionReport = async () => {
+    const startDate = dateRange.start;
+    const nextDay = new Date(dateRange.end);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endDate = nextDay.toISOString().split('T')[0];
+
+    const { data: garages } = await supabase
+      .from('garages')
+      .select('*')
+      .order('total_commission_owed', { ascending: false });
+
+    const { data: commissionsWithSales } = await supabase
+      .from('sales')
+      .select('id, sale_number, sale_date, subtotal, commissions(id, amount, status, garage_id, garages(name))')
+      .gte('sale_date', startDate)
+      .lt('sale_date', endDate)
+      .not('commissions', 'is', null);
+
+    // Flatten commissions
+    const commissions = [];
+    commissionsWithSales?.forEach(sale => {
+      sale.commissions?.forEach(comm => {
+        commissions.push({
+          ...comm,
+          sales: {
+            sale_number: sale.sale_number,
+            sale_date: sale.sale_date,
+            subtotal: sale.subtotal
+          }
+        });
+      });
+    });
+
+    const totalOwed = garages?.reduce((sum, g) => sum + parseFloat(g.total_commission_owed), 0) || 0;
+    const totalPaid = garages?.reduce((sum, g) => sum + parseFloat(g.total_commission_paid), 0) || 0;
+
+    setReportData({
+      garages: garages || [],
+      commissions: commissions || [],
+      totalOwed,
+      totalPaid,
+      totalCommission: totalOwed + totalPaid
+    });
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Analytics</h2>
-      <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center">
-        <TrendingUp className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">Reports will be implemented in Phase 7</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Analytics</h2>
+        
+        {/* Report Type Selector */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+          <button
+            onClick={() => setActiveReport('sales')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              activeReport === 'sales'
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <ShoppingCart className="h-6 w-6 mx-auto mb-1" />
+            <p className="text-xs font-medium">Sales Report</p>
+          </button>
+          <button
+            onClick={() => setActiveReport('profit')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              activeReport === 'profit'
+                ? 'border-green-500 bg-green-50 text-green-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <TrendingUp className="h-6 w-6 mx-auto mb-1" />
+            <p className="text-xs font-medium">Profit/Loss</p>
+          </button>
+          <button
+            onClick={() => setActiveReport('outstanding')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              activeReport === 'outstanding'
+                ? 'border-red-500 bg-red-50 text-red-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <DollarSign className="h-6 w-6 mx-auto mb-1" />
+            <p className="text-xs font-medium">Outstanding</p>
+          </button>
+          <button
+            onClick={() => setActiveReport('products')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              activeReport === 'products'
+                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <Package className="h-6 w-6 mx-auto mb-1" />
+            <p className="text-xs font-medium">Products</p>
+          </button>
+          <button
+            onClick={() => setActiveReport('commission')}
+            className={`p-3 rounded-lg border-2 transition-all ${
+              activeReport === 'commission'
+                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <Users className="h-6 w-6 mx-auto mb-1" />
+            <p className="text-xs font-medium">Commissions</p>
+          </button>
+        </div>
+
+        {/* Date Range Selector */}
+        <div className="flex gap-4 items-center">
+          <div>
+            <label className="text-sm text-gray-600 mr-2">From:</label>
+            <input
+              type="date"
+              value={dateRange.start}
+              onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-600 mr-2">To:</label>
+            <input
+              type="date"
+              value={dateRange.end}
+              onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <button
+            onClick={() => {
+              const today = new Date();
+              setDateRange({
+                start: new Date(today.setDate(1)).toISOString().split('T')[0],
+                end: new Date().toISOString().split('T')[0]
+              });
+            }}
+            className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            This Month
+          </button>
+        </div>
+      </div>
+
+      {/* Report Content */}
+      {loading ? (
+        <div className="bg-white rounded-lg shadow p-12 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Generating report...</p>
+        </div>
+      ) : (
+        <>
+          {activeReport === 'sales' && reportData?.summary && <SalesReportView data={reportData} dateRange={dateRange} />}
+          {activeReport === 'profit' && reportData?.revenue !== undefined && <ProfitReportView data={reportData} dateRange={dateRange} />}
+          {activeReport === 'outstanding' && reportData?.totalCustomer !== undefined && <OutstandingReportView data={reportData} />}
+          {activeReport === 'products' && reportData?.bestSelling && <ProductsReportView data={reportData} dateRange={dateRange} />}
+          {activeReport === 'commission' && reportData?.garages && reportData?.commissions && <CommissionReportView data={reportData} dateRange={dateRange} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Sales Report View
+function SalesReportView({ data, dateRange }) {
+  if (!data || !data.summary) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Sales</p>
+          <p className="text-2xl font-bold text-gray-900">{data.summary.totalSales}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Amount</p>
+          <p className="text-2xl font-bold text-blue-600">₹{data.summary.totalAmount.toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Paid Sales</p>
+          <p className="text-2xl font-bold text-green-600">{data.summary.paidCount}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Credit Sales</p>
+          <p className="text-2xl font-bold text-red-600">{data.summary.creditCount}</p>
+        </div>
+      </div>
+
+      {/* Sales List */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales Transactions</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sale #</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer/Garage</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Subtotal</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">GST</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {data.sales.map(sale => (
+                  <tr key={sale.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {new Date(sale.sale_date).toLocaleDateString('en-IN')}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{sale.sale_number}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                        {sale.sale_type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {sale.customers?.name || sale.direct_garage?.name || sale.referral_garage?.name || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right">₹{parseFloat(sale.subtotal).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-right">₹{parseFloat(sale.gst_amount).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm text-right font-semibold">₹{parseFloat(sale.total).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        sale.payment_status === 'paid' 
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {sale.payment_status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Profit/Loss Report View
+function ProfitReportView({ data, dateRange }) {
+  if (!data || data.revenue === undefined || data.profit === undefined) {
+    return <div className="bg-white rounded-lg shadow p-12 text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+    </div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">Profit & Loss Statement</h3>
+        
+        <div className="space-y-4">
+          <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
+            <span className="font-medium text-green-900">Revenue (excl. GST)</span>
+            <span className="text-xl font-bold text-green-600">₹{data.revenue.toFixed(2)}</span>
+          </div>
+
+          <div className="border-l-4 border-red-300 pl-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700">Monthly Expenses</span>
+              <span className="font-semibold text-gray-900">₹{data.expenses.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700">Stock Purchases</span>
+              <span className="font-semibold text-gray-900">₹{data.stockCost.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t">
+              <span className="font-medium text-red-900">Total Costs</span>
+              <span className="text-lg font-bold text-red-600">₹{data.totalCost.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className={`flex justify-between items-center p-6 rounded-lg ${
+            data.profit >= 0 ? 'bg-green-100' : 'bg-red-100'
+          }`}>
+            <span className="text-xl font-bold">Net Profit</span>
+            <div className="text-right">
+              <p className={`text-3xl font-bold ${data.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ₹{data.profit.toFixed(2)}
+              </p>
+              <p className="text-sm text-gray-600">Margin: {data.profitMargin}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Period Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-900">
+          <strong>Period:</strong> {new Date(dateRange.start).toLocaleDateString('en-IN')} to {new Date(dateRange.end).toLocaleDateString('en-IN')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Outstanding Payments Report
+function OutstandingReportView({ data }) {
+  if (!data || data.totalCustomer === undefined || data.totalGarage === undefined) {
+    return (
+      <div className="bg-white rounded-lg shadow p-12 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading outstanding payments...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Customer Outstanding</p>
+          <p className="text-2xl font-bold text-red-600">₹{data.totalCustomer.toFixed(2)}</p>
+          <p className="text-xs text-gray-500 mt-1">{data.customers.length} customers</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Garage Outstanding</p>
+          <p className="text-2xl font-bold text-orange-600">₹{data.totalGarage.toFixed(2)}</p>
+          <p className="text-xs text-gray-500 mt-1">{data.garages.length} garages</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Outstanding</p>
+          <p className="text-2xl font-bold text-red-600">₹{data.grandTotal.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* Customers with Credit */}
+      {data.customers.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Customers with Pending Payments</h3>
+          <div className="space-y-2">
+            {data.customers.map(customer => (
+              <div key={customer.id} className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{customer.name}</p>
+                  <p className="text-sm text-gray-600">{customer.phone}</p>
+                </div>
+                <span className="text-lg font-bold text-red-600">
+                  ₹{parseFloat(customer.credit_balance).toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Garages with Credit */}
+      {data.garages.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Garages with Pending Payments</h3>
+          <div className="space-y-2">
+            {data.garages.map(garage => (
+              <div key={garage.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{garage.name}</p>
+                  <p className="text-sm text-gray-600">{garage.contact_person} | {garage.phone}</p>
+                </div>
+                <span className="text-lg font-bold text-red-600">
+                  ₹{parseFloat(garage.credit_balance).toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Products Report View
+function ProductsReportView({ data, dateRange }) {
+  if (!data || !data.bestSelling || !data.lowStock) {
+    return <div className="bg-white rounded-lg shadow p-12 text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+    </div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Total Stock Value</p>
+            <p className="text-3xl font-bold text-blue-600">₹{data.totalStockValue.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Low Stock Items</p>
+            <p className="text-3xl font-bold text-red-600">{data.lowStock.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Best Selling Products */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Best Selling Products</h3>
+        <div className="space-y-2">
+          {data.bestSelling.map((product, index) => (
+            <div key={product.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-bold text-gray-400">#{index + 1}</span>
+                <div>
+                  <p className="font-medium text-gray-900">{product.name}</p>
+                  <p className="text-xs text-gray-600">SKU: {product.sku || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-gray-900">{product.soldQuantity} units</p>
+                <p className="text-sm text-green-600">₹{product.revenue.toFixed(2)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Low Stock Alert */}
+      {data.lowStock.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-red-900 mb-4">⚠️ Low Stock Products</h3>
+          <div className="space-y-2">
+            {data.lowStock.map(product => (
+              <div key={product.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{product.name}</p>
+                  <p className="text-xs text-gray-600">SKU: {product.sku || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-red-600">{product.current_quantity} units</p>
+                  <p className="text-xs text-gray-500">Min: {product.minimum_quantity}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+   
+
+// Commission Report View
+function CommissionReportView({ data, dateRange }) {
+  if (!data || !data.garages) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Total Commission</p>
+          <p className="text-2xl font-bold text-purple-600">₹{data.totalCommission.toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Pending</p>
+          <p className="text-2xl font-bold text-orange-600">₹{data.totalOwed.toFixed(2)}</p>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-sm text-gray-600">Paid</p>
+          <p className="text-2xl font-bold text-green-600">₹{data.totalPaid.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* Garage-wise Commission */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Commission by Garage</h3>
+        <div className="space-y-3">
+          {data.garages.map(garage => (
+            <div key={garage.id} className="p-4 border border-gray-200 rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-gray-900">{garage.name}</p>
+                  <p className="text-sm text-gray-600">{garage.contact_person} | Rate: {garage.commission_rate}%</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-orange-600">Pending: ₹{parseFloat(garage.total_commission_owed).toFixed(2)}</p>
+                  <p className="text-sm text-green-600">Paid: ₹{parseFloat(garage.total_commission_paid).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Commission Transactions */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Commission Transactions</h3>
+        <div className="space-y-2">
+          {data.commissions.map(comm => (
+            <div key={comm.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">{comm.garages?.name}</p>
+                <p className="text-sm text-gray-600">
+                  Sale #{comm.sales?.sale_number} | {comm.sales?.sale_date && new Date(comm.sales.sale_date).toLocaleDateString('en-IN')}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-orange-600">₹{parseFloat(comm.amount).toFixed(2)}</p>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  comm.status === 'paid' 
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-orange-100 text-orange-800'
+                }`}>
+                  {comm.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

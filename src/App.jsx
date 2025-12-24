@@ -5197,7 +5197,7 @@ function PendingPaymentsWidget({ user }) {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Payments</h3>
         <div className="text-center py-8">
-          <p className="text-green-600 font-medium">✓ All payments collected!</p>
+          <p className="text-green-600 font-medium"> All payments collected!</p>
         </div>
       </div>
     );

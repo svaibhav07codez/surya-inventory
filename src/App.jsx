@@ -1793,6 +1793,27 @@ function Products({ user }) {
                         >
                           <Plus className="h-4 w-4" />
                         </button>
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Are you sure you want to delete "${product.name}"? This cannot be undone.`)) {
+                              try {
+                                const { error } = await supabase
+                                  .from('products')
+                                  .delete()
+                                  .eq('id', product.id);
+                                
+                                if (error) throw error;
+                                fetchProducts();
+                              } catch (err) {
+                                alert('Failed to delete product: ' + err.message);
+                              }
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   )}
@@ -2133,15 +2154,38 @@ function Customers({ user }) {
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm">
-                    <button
-                      onClick={() => {
-                        setSelectedCustomer(customer);
-                        setShowDetailsModal(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      View Details
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setSelectedCustomer(customer);
+                          setShowDetailsModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`Are you sure you want to delete customer "${customer.name}"? This cannot be undone.`)) {
+                            try {
+                              const { error } = await supabase
+                                .from('customers')
+                                .delete()
+                                .eq('id', customer.id);
+                              
+                              if (error) throw error;
+                              fetchCustomers();
+                            } catch (err) {
+                              alert('Failed to delete customer: ' + err.message);
+                            }
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete Customer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2735,15 +2779,38 @@ function Garages({ user }) {
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm">
-                    <button
-                      onClick={() => {
-                        setSelectedGarage(garage);
-                        setShowDetailsModal(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      View Details
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setSelectedGarage(garage);
+                          setShowDetailsModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`Are you sure you want to delete garage "${garage.name}"? This will also delete all related commissions and history. This cannot be undone.`)) {
+                            try {
+                              const { error } = await supabase
+                                .from('garages')
+                                .delete()
+                                .eq('id', garage.id);
+                              
+                              if (error) throw error;
+                              fetchGarages();
+                            } catch (err) {
+                              alert('Failed to delete garage: ' + err.message);
+                            }
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete Garage"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -4437,8 +4504,33 @@ function Expenses({ user }) {
                             <p className="text-sm text-gray-700 mt-2">{expense.description}</p>
                           )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900">₹{parseFloat(expense.amount).toFixed(2)}</p>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-900">₹{parseFloat(expense.amount).toFixed(2)}</p>
+                          </div>
+                          {user.role === 'admin' && (
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Are you sure you want to delete this expense? This cannot be undone.')) {
+                                  try {
+                                    const { error } = await supabase
+                                      .from('expenses')
+                                      .delete()
+                                      .eq('id', expense.id);
+                                    
+                                    if (error) throw error;
+                                    fetchData();
+                                  } catch (err) {
+                                    alert('Failed to delete expense: ' + err.message);
+                                  }
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                              title="Delete Expense"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4475,9 +4567,34 @@ function Expenses({ user }) {
                             <p className="text-sm text-gray-500 mt-1 italic">{purchase.notes}</p>
                           )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900">₹{parseFloat(purchase.total_cost).toFixed(2)}</p>
-                          <p className="text-xs text-gray-500">Total Cost</p>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-900">₹{parseFloat(purchase.total_cost).toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">Total Cost</p>
+                          </div>
+                          {user.role === 'admin' && (
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Delete this stock purchase record? Note: This will NOT reduce the product quantity.')) {
+                                  try {
+                                    const { error } = await supabase
+                                      .from('stock_purchases')
+                                      .delete()
+                                      .eq('id', purchase.id);
+                                    
+                                    if (error) throw error;
+                                    fetchData();
+                                  } catch (err) {
+                                    alert('Failed to delete: ' + err.message);
+                                  }
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                              title="Delete Record"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4568,6 +4685,9 @@ function AddExpenseModal({ onClose, onSuccess }) {
               <option value="rent">Rent</option>
               <option value="electricity">Electricity</option>
               <option value="salary">Salary</option>
+              <option value="fuel">Fuel</option>
+              <option value="courier">Courier</option>
+              <option value="transportation">Transportation</option>
               <option value="commission">Commission</option>
               <option value="other">Other</option>
             </select>

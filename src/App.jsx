@@ -56,9 +56,9 @@ export default function InventoryManagementApp() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation 
-        user={user} 
-        currentView={currentView} 
+      <Navigation
+        user={user}
+        currentView={currentView}
         setCurrentView={(view) => {
           setCurrentView(view);
           if (view !== 'new-sale') setSaleType(null);
@@ -66,8 +66,8 @@ export default function InventoryManagementApp() {
         handleLogout={handleLogout}
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <ViewRenderer 
-          view={currentView} 
+        <ViewRenderer
+          view={currentView}
           user={user}
           setCurrentView={setCurrentView}
           saleType={saleType}
@@ -113,7 +113,7 @@ function LoginPage({ setUser }) {
     } catch (err) {
       setError('Login failed. Please try again.');
     }
-    
+
     setLoading(false);
   };
 
@@ -219,11 +219,10 @@ function Navigation({ user, currentView, setCurrentView, handleLogout }) {
               <button
                 key={item.id}
                 onClick={() => setCurrentView(item.id)}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                  currentView === item.id
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${currentView === item.id
                     ? 'bg-blue-50 text-blue-600'
                     : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-sm font-medium">{item.label}</span>
@@ -264,11 +263,10 @@ function Navigation({ user, currentView, setCurrentView, handleLogout }) {
                   setCurrentView(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`w-full px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                  currentView === item.id
+                className={`w-full px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${currentView === item.id
                     ? 'bg-blue-50 text-blue-600'
                     : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <item.icon className="h-4 w-4" />
                 <span className="text-sm font-medium">{item.label}</span>
@@ -346,7 +344,7 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
         .select('total, sale_date')
         .gte('sale_date', today)
         .lt('sale_date', tomorrowDate);
-      
+
       console.log('Fetching sales for:', today, 'Found:', salesData);
 
       if (salesError) {
@@ -363,7 +361,7 @@ function Dashboard({ user, setCurrentView, handleNewSale }) {
       }
 
       // Filter low stock products in JavaScript
-      const lowStockProducts = allProducts?.filter(p => 
+      const lowStockProducts = allProducts?.filter(p =>
         p.current_quantity <= p.minimum_quantity
       ) || [];
 
@@ -613,7 +611,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   const [loading, setLoading] = useState(false);
   const [showBill, setShowBill] = useState(false);
   const [saleData, setSaleData] = useState(null);
-  
+
   // Customer-related states
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -629,6 +627,9 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   const [vehicleName, setVehicleName] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [isVehicleSpecific, setIsVehicleSpecific] = useState(false);
+
+  const [quickSaleCustomerName, setQuickSaleCustomerName] = useState('');
+  const [quickSaleCustomerPhone, setQuickSaleCustomerPhone] = useState('');
 
   useEffect(() => {
     if (saleType) {
@@ -650,7 +651,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         .from('customers')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setCustomers(data || []);
     } catch (error) {
@@ -664,7 +665,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         .from('garages')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setGarages(data || []);
     } catch (error) {
@@ -679,7 +680,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         .select('*')
         .gt('current_quantity', 0)
         .order('name');
-      
+
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
@@ -690,7 +691,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
   const handleSearch = (term) => {
     setSearchTerm(term);
     if (term.length > 0) {
-      const filtered = products.filter(p => 
+      const filtered = products.filter(p =>
         p.sku.toLowerCase().includes(term.toLowerCase()) ||
         p.name.toLowerCase().includes(term.toLowerCase())
       );
@@ -718,8 +719,8 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         alert('Cannot add more than available stock!');
         return;
       }
-      setCart(cart.map(item => 
-        item.id === product.id 
+      setCart(cart.map(item =>
+        item.id === product.id
           ? { ...item, quantity: item.quantity + 1, current_quantity: freshProduct.current_quantity }
           : item
       ));
@@ -740,7 +741,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       alert('Cannot exceed available stock!');
       return;
     }
-    setCart(cart.map(item => 
+    setCart(cart.map(item =>
       item.id === productId ? { ...item, quantity: newQuantity } : item
     ));
   };
@@ -790,6 +791,17 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       return;
     }
 
+    if (saleType === 'quick' && (paymentStatus === 'partial' || paymentStatus === 'credit')) {
+      if (!quickSaleCustomerName || !quickSaleCustomerPhone) {
+        alert('Please enter customer name and phone for credit/partial payment');
+        return;
+      }
+      if (quickSaleCustomerPhone.length < 10) {
+        alert('Please enter a valid 10-digit phone number');
+        return;
+      }
+    }
+
     if ((paymentStatus === 'partial' || paymentStatus === 'credit') && !amountPaid) {
       alert('Please enter amount paid');
       return;
@@ -802,13 +814,31 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       const totalAmount = parseFloat(totals.total);
       const paidAmount = paymentStatus === 'paid' ? totalAmount : parseFloat(amountPaid || 0);
       const creditAmount = totalAmount - paidAmount;
-      
+
+      let quickCustomerId = null;
+      if (saleType === 'quick' && (paymentStatus === 'partial' || paymentStatus === 'credit')) {
+        // Create a customer profile for this quick sale credit customer
+        const { data: newCustomer, error: customerError } = await supabase
+          .from('customers')
+          .insert([{
+            name: quickSaleCustomerName,
+            phone: quickSaleCustomerPhone,
+            customer_type: 'individual',
+            credit_balance: 0
+          }])
+          .select()
+          .single();
+
+        if (customerError) throw customerError;
+        quickCustomerId = newCustomer.id;
+      }
+
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert([{
           sale_number: saleNumber,
           sale_type: saleType,
-          customer_id: selectedCustomer?.id || null,
+          customer_id: selectedCustomer?.id || quickCustomerId || null,
           garage_id: selectedGarage?.id || null,
           vehicle_name: vehicleName || null,
           vehicle_model: vehicleModel || null,
@@ -825,6 +855,13 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         .single();
 
       if (saleError) throw saleError;
+
+      if (quickCustomerId && creditAmount > 0) {
+        await supabase
+          .from('customers')
+          .update({ credit_balance: creditAmount })
+          .eq('id', quickCustomerId);
+      }
 
       const saleItems = cart.map(item => ({
         sale_id: sale.id,
@@ -847,8 +884,8 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       for (const item of cart) {
         const { error: updateError } = await supabase
           .from('products')
-          .update({ 
-            current_quantity: item.current_quantity - item.quantity 
+          .update({
+            current_quantity: item.current_quantity - item.quantity
           })
           .eq('id', item.id);
 
@@ -856,12 +893,15 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       }
 
       // Update customer credit if applicable
-      if (selectedCustomer && creditAmount > 0) {
-        const newBalance = parseFloat(selectedCustomer.credit_balance) + creditAmount;
+      if ((selectedCustomer || quickCustomerId) && creditAmount > 0) {
+        const customerId = selectedCustomer?.id || quickCustomerId;
+        const currentBalance = selectedCustomer?.credit_balance || 0;
+        const newBalance = parseFloat(currentBalance) + creditAmount;
+
         await supabase
           .from('customers')
           .update({ credit_balance: newBalance })
-          .eq('id', selectedCustomer.id);
+          .eq('id', customerId);
       }
 
       // Update garage credit if applicable
@@ -901,7 +941,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
         referredBy: referredByGarage
       });
       setShowBill(true);
-      
+
     } catch (error) {
       console.error('Error completing sale:', error);
       alert('Failed to complete sale: ' + error.message);
@@ -928,6 +968,8 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
     setVehicleModel('');
     setIsVehicleSpecific(false);
     fetchProducts();
+    setQuickSaleCustomerName('');
+    setQuickSaleCustomerPhone('');
     if (saleType === 'customer') fetchCustomers();
     if (saleType === 'garage') fetchGarages();
   };
@@ -1013,7 +1055,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       {saleType === 'customer' && !selectedCustomer && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Customer</h3>
-          
+
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -1073,7 +1115,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       {saleType === 'garage' && !selectedGarage && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Garage</h3>
-          
+
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -1221,7 +1263,7 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
             <h3 className="text-lg font-semibold text-gray-900">Was this customer referred by a garage?</h3>
             <span className="text-sm text-gray-500">Optional</span>
           </div>
-          
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
@@ -1287,205 +1329,234 @@ function NewSale({ saleType, setSaleType, setCurrentView }) {
       )}
 
       {/* Product Search & Cart (show when ready) */}
-      {((saleType === 'quick') || 
+      {((saleType === 'quick') ||
         (saleType === 'customer' && selectedCustomer) ||
         (saleType === 'garage' && selectedGarage)) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Search Products</h3>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Search by SKU or product name..."
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              {searchResults.length > 0 && (
-                <div className="mt-4 max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
-                  {searchResults.map(product => (
-                    <button
-                      key={product.id}
-                      onClick={() => addToCart(product)}
-                      className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                    >
-                      <div className="text-left">
-                        <div className="font-medium text-gray-900">{product.name}</div>
-                        <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {product.current_quantity}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-gray-900">₹{product.selling_price}</div>
-                        <div className="text-xs text-gray-500">GST: {product.gst_rate}%</div>
-                      </div>
-                    </button>
-                  ))}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Search Products</h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    placeholder="Search by SKU or product name..."
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
                 </div>
-              )}
-            </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Cart ({cart.length} items)</h3>
-              
-              {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <ShoppingCart className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p>No items in cart. Search and add products above.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {cart.map(item => {
-                    const itemTotal = item.selling_price * item.quantity;
-                    const itemGst = (itemTotal * item.gst_rate) / 100;
-                    return (
-                      <div key={item.id} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900">{item.name}</h4>
-                            <p className="text-sm text-gray-600">SKU: {item.sku}</p>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                {searchResults.length > 0 && (
+                  <div className="mt-4 max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                    {searchResults.map(product => (
+                      <button
+                        key={product.id}
+                        onClick={() => addToCart(product)}
+                        className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                      >
+                        <div className="text-left">
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {product.current_quantity}</div>
                         </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                              -
-                            </button>
-                            <span className="w-12 text-center font-medium">{item.quantity}</span>
-                            <button
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              disabled={item.quantity >= item.current_quantity}
-                              className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            >
-                              +
-                            </button>
-                            <span className="text-sm text-gray-500">
-                              (Max: {item.current_quantity})
-                            </span>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="font-semibold text-gray-900">
-                              ₹{(itemTotal + itemGst).toFixed(2)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Base: ₹{itemTotal.toFixed(2)} + GST: ₹{itemGst.toFixed(2)}
-                            </div>
-                          </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">₹{product.selling_price}</div>
+                          <div className="text-xs text-gray-500">GST: {product.gst_rate}%</div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between text-gray-700">
-                  <span>Subtotal:</span>
-                  <span>₹{totals.subtotal}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>GST:</span>
-                  <span>₹{totals.gst}</span>
-                </div>
-                {referredByGarage && (
-                  <div className="flex justify-between text-orange-600 text-sm">
-                    <span>Commission ({referredByGarage.commission_rate}%):</span>
-                    <span>₹{totals.commission}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
-                <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
-                  <span>Total:</span>
-                  <span>₹{totals.total}</span>
-                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Cart ({cart.length} items)</h3>
+
+                {cart.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShoppingCart className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                    <p>No items in cart. Search and add products above.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {cart.map(item => {
+                      const itemTotal = item.selling_price * item.quantity;
+                      const itemGst = (itemTotal * item.gst_rate) / 100;
+                      return (
+                        <div key={item.id} className="p-4 border border-gray-200 rounded-lg">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900">{item.name}</h4>
+                              <p className="text-sm text-gray-600">SKU: {item.sku}</p>
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(item.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50"
+                              >
+                                -
+                              </button>
+                              <span className="w-12 text-center font-medium">{item.quantity}</span>
+                              <button
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                disabled={item.quantity >= item.current_quantity}
+                                className="w-8 h-8 border border-gray-300 rounded hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                              >
+                                +
+                              </button>
+                              <span className="text-sm text-gray-500">
+                                (Max: {item.current_quantity})
+                              </span>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="font-semibold text-gray-900">
+                                ₹{(itemTotal + itemGst).toFixed(2)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Base: ₹{itemTotal.toFixed(2)} + GST: ₹{itemGst.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Details</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Payment Mode
-                  </label>
-                  <select
-                    value={paymentMode}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI/Google Pay</option>
-                    <option value="card">Card</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                  </select>
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-gray-700">
+                    <span>Subtotal:</span>
+                    <span>₹{totals.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-700">
+                    <span>GST:</span>
+                    <span>₹{totals.gst}</span>
+                  </div>
+                  {referredByGarage && (
+                    <div className="flex justify-between text-orange-600 text-sm">
+                      <span>Commission ({referredByGarage.commission_rate}%):</span>
+                      <span>₹{totals.commission}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-3 flex justify-between text-lg font-bold text-gray-900">
+                    <span>Total:</span>
+                    <span>₹{totals.total}</span>
+                  </div>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Payment Status
-                  </label>
-                  <select
-                    value={paymentStatus}
-                    onChange={(e) => setPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="paid">Paid</option>
-                    <option value="partial">Partial Payment</option>
-                    <option value="credit">Credit (Pay Later)</option>
-                  </select>
-                </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Details</h3>
 
-                {(paymentStatus === 'partial' || paymentStatus === 'credit') && (
+                <div className="space-y-4">
+
+                  {saleType === 'quick' && (paymentStatus === 'partial' || paymentStatus === 'credit') && (
+                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm font-medium text-yellow-900 mb-3">Customer Information Required</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Customer Name *</label>
+                          <input
+                            type="text"
+                            value={quickSaleCustomerName}
+                            onChange={(e) => setQuickSaleCustomerName(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="Enter customer name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Customer Phone *</label>
+                          <input
+                            type="tel"
+                            value={quickSaleCustomerPhone}
+                            onChange={(e) => setQuickSaleCustomerPhone(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="10-digit phone number"
+                            maxLength="10"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Amount Paid
+                      Payment Mode
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder="Enter amount paid"
+                    <select
+                      value={paymentMode}
+                      onChange={(e) => setPaymentMode(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    {amountPaid && (
-                      <p className="mt-1 text-sm text-gray-600">
-                        Remaining: ₹{(parseFloat(totals.total) - parseFloat(amountPaid || 0)).toFixed(2)}
-                      </p>
-                    )}
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI/Google Pay</option>
+                      <option value="card">Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                    </select>
                   </div>
-                )}
-              </div>
 
-              <button
-                onClick={handleCompleteSale}
-                disabled={loading || cart.length === 0}
-                className="w-full mt-6 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Processing...' : 'Complete Sale & Print Bill'}
-              </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Payment Status
+                    </label>
+                    <select
+                      value={paymentStatus}
+                      onChange={(e) => setPaymentStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="paid">Paid</option>
+                      <option value="partial">Partial Payment</option>
+                      <option value="credit">Credit (Pay Later)</option>
+                    </select>
+                  </div>
+
+                  {(paymentStatus === 'partial' || paymentStatus === 'credit') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount Paid
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={amountPaid}
+                        onChange={(e) => setAmountPaid(e.target.value)}
+                        placeholder="Enter amount paid"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      {amountPaid && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          Remaining: ₹{(parseFloat(totals.total) - parseFloat(amountPaid || 0)).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleCompleteSale}
+                  disabled={loading || cart.length === 0}
+                  className="w-full mt-6 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Processing...' : 'Complete Sale & Print Bill'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {showAddCustomer && (
         <AddCustomerModal
@@ -1537,7 +1608,7 @@ function BillView({ saleData, onClose, onNewSale }) {
           }
         }
       `}</style>
-      
+
       <div className="bg-white rounded-lg shadow-lg p-8" id="bill">
         <div className="text-center border-b-2 border-gray-300 pb-4 mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Surya's Auto Parts</h1>
@@ -1612,9 +1683,8 @@ function BillView({ saleData, onClose, onNewSale }) {
             </div>
             <div>
               <span className="text-gray-600">Payment Status:</span>
-              <span className={`ml-2 font-medium capitalize ${
-                saleData.payment_status === 'paid' ? 'text-green-600' : 'text-orange-600'
-              }`}>
+              <span className={`ml-2 font-medium capitalize ${saleData.payment_status === 'paid' ? 'text-green-600' : 'text-orange-600'
+                }`}>
                 {saleData.payment_status}
               </span>
             </div>
@@ -1712,7 +1782,7 @@ function Products({ user }) {
             />
           </div>
           {user.role === 'admin' && (
-            <button 
+            <button
               onClick={() => setShowAddModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
             >
@@ -1730,9 +1800,9 @@ function Products({ user }) {
             {searchTerm ? 'No products found' : 'No products yet'}
           </h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm 
+            {searchTerm
               ? 'Try a different search term'
-              : user.role === 'admin' 
+              : user.role === 'admin'
                 ? 'Start by adding your first product!'
                 : 'Ask admin to add products to get started.'}
           </p>
@@ -1761,11 +1831,10 @@ function Products({ user }) {
                   <td className="px-6 py-4 text-sm text-gray-600">{product.category}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">₹{product.selling_price}</td>
                   <td className="px-6 py-4 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      product.current_quantity <= product.minimum_quantity
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${product.current_quantity <= product.minimum_quantity
                         ? 'bg-red-100 text-red-800'
                         : 'bg-green-100 text-green-800'
-                    }`}>
+                      }`}>
                       {product.current_quantity}
                     </span>
                   </td>
@@ -1801,7 +1870,7 @@ function Products({ user }) {
                                   .from('products')
                                   .delete()
                                   .eq('id', product.id);
-                                
+
                                 if (error) throw error;
                                 fetchProducts();
                               } catch (err) {
@@ -1855,8 +1924,8 @@ function Products({ user }) {
       )}
 
       {showAddModal && (
-        <AddProductModal 
-          onClose={() => setShowAddModal(false)} 
+        <AddProductModal
+          onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             fetchProducts();
             setShowAddModal(false);
@@ -1883,9 +1952,9 @@ function AddProductModal({ onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
-    
-    if (!formData.name || !formData.category || !formData.purchase_price || 
-        !formData.selling_price || !formData.current_quantity || !formData.minimum_quantity) {
+
+    if (!formData.name || !formData.category || !formData.purchase_price ||
+      !formData.selling_price || !formData.current_quantity || !formData.minimum_quantity) {
       setError('Please fill all required fields');
       return;
     }
@@ -1917,70 +1986,70 @@ function AddProductModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Product</h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Optional)</label>
             <input
               type="text"
               value={formData.sku}
-              onChange={(e) => setFormData({...formData, sku: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., BAT001"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Exide Battery 12V"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
             <input
               type="text"
               value={formData.category}
-              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Batteries"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
             <input
               type="number"
               step="0.01"
               value={formData.purchase_price}
-              onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="3500"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
             <input
               type="number"
               step="0.01"
               value={formData.selling_price}
-              onChange={(e) => setFormData({...formData, selling_price: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="4200"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate (%) *</label>
             <select
               value={formData.gst_rate}
-              onChange={(e) => setFormData({...formData, gst_rate: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, gst_rate: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="0">0%</option>
@@ -1990,24 +2059,24 @@ function AddProductModal({ onClose, onSuccess }) {
               <option value="28">28%</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Current Quantity *</label>
             <input
               type="number"
               value={formData.current_quantity}
-              onChange={(e) => setFormData({...formData, current_quantity: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, current_quantity: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="50"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Quantity *</label>
             <input
               type="number"
               value={formData.minimum_quantity}
-              onChange={(e) => setFormData({...formData, minimum_quantity: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, minimum_quantity: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="10"
             />
@@ -2100,7 +2169,7 @@ function Customers({ user }) {
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowAddModal(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
@@ -2117,7 +2186,7 @@ function Customers({ user }) {
             {searchTerm ? 'No customers found' : 'No customers yet'}
           </h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm 
+            {searchTerm
               ? 'Try a different search term'
               : 'Start by adding your first customer!'}
           </p>
@@ -2164,27 +2233,29 @@ function Customers({ user }) {
                       >
                         View Details
                       </button>
-                      <button
-                        onClick={async () => {
-                          if (window.confirm(`Are you sure you want to delete customer "${customer.name}"? This cannot be undone.`)) {
-                            try {
-                              const { error } = await supabase
-                                .from('customers')
-                                .delete()
-                                .eq('id', customer.id);
-                              
-                              if (error) throw error;
-                              fetchCustomers();
-                            } catch (err) {
-                              alert('Failed to delete customer: ' + err.message);
+                      {user.role === 'admin' && (
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Are you sure you want to delete customer "${customer.name}"? This cannot be undone.`)) {
+                              try {
+                                const { error } = await supabase
+                                  .from('customers')
+                                  .delete()
+                                  .eq('id', customer.id);
+
+                                if (error) throw error;
+                                fetchCustomers();
+                              } catch (err) {
+                                alert('Failed to delete customer: ' + err.message);
+                              }
                             }
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-700"
-                        title="Delete Customer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                          }}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete Customer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -2195,8 +2266,8 @@ function Customers({ user }) {
       )}
 
       {showAddModal && (
-        <AddCustomerModal 
-          onClose={() => setShowAddModal(false)} 
+        <AddCustomerModal
+          onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             fetchCustomers();
             setShowAddModal(false);
@@ -2230,7 +2301,7 @@ function AddCustomerModal({ onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
-    
+
     if (!formData.name || !formData.phone) {
       setError('Please fill all required fields');
       return;
@@ -2266,36 +2337,36 @@ function AddCustomerModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Customer</h3>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="Customer name"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
             <input
               type="tel"
               value={formData.phone}
-              onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="10-digit phone number"
               maxLength="10"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
             <select
               value={formData.customer_type}
-              onChange={(e) => setFormData({...formData, customer_type: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, customer_type: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="individual">Individual</option>
@@ -2392,9 +2463,8 @@ function CustomerDetailsModal({ customer, onClose }) {
           <div className="mt-4 p-4 bg-gray-50 rounded-lg flex justify-between items-center">
             <div>
               <p className="text-sm text-gray-600">Credit Balance</p>
-              <p className={`text-2xl font-bold ${
-                customer.credit_balance > 0 ? 'text-red-600' : 'text-green-600'
-              }`}>
+              <p className={`text-2xl font-bold ${customer.credit_balance > 0 ? 'text-red-600' : 'text-green-600'
+                }`}>
                 ₹{parseFloat(customer.credit_balance).toFixed(2)}
               </p>
             </div>
@@ -2414,21 +2484,19 @@ function CustomerDetailsModal({ customer, onClose }) {
           <div className="flex px-6">
             <button
               onClick={() => setActiveTab('sales')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'sales'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${activeTab === 'sales'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Sales History ({sales.length})
             </button>
             <button
               onClick={() => setActiveTab('payments')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'payments'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${activeTab === 'payments'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Payment History ({payments.length})
             </button>
@@ -2458,13 +2526,12 @@ function CustomerDetailsModal({ customer, onClose }) {
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-gray-900">₹{parseFloat(sale.total).toFixed(2)}</p>
-                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
-                              sale.payment_status === 'paid' 
+                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${sale.payment_status === 'paid'
                                 ? 'bg-green-100 text-green-800'
                                 : sale.payment_status === 'partial'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
                               {sale.payment_status}
                             </span>
                           </div>
@@ -2578,7 +2645,7 @@ function RecordPaymentModal({ customer, onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Record Payment</h3>
-        
+
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">Outstanding Balance</p>
           <p className="text-2xl font-bold text-red-600">
@@ -2713,7 +2780,7 @@ function Garages({ user }) {
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowAddModal(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
@@ -2730,7 +2797,7 @@ function Garages({ user }) {
             {searchTerm ? 'No garages found' : 'No garages yet'}
           </h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm 
+            {searchTerm
               ? 'Try a different search term'
               : 'Start by adding your first garage partner!'}
           </p>
@@ -2789,27 +2856,29 @@ function Garages({ user }) {
                       >
                         View Details
                       </button>
-                      <button
-                        onClick={async () => {
-                          if (window.confirm(`Are you sure you want to delete garage "${garage.name}"? This will also delete all related commissions and history. This cannot be undone.`)) {
-                            try {
-                              const { error } = await supabase
-                                .from('garages')
-                                .delete()
-                                .eq('id', garage.id);
-                              
-                              if (error) throw error;
-                              fetchGarages();
-                            } catch (err) {
-                              alert('Failed to delete garage: ' + err.message);
+                      {user.role === 'admin' && (
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Are you sure you want to delete garage "${garage.name}"? This will also delete all related commissions and history. This cannot be undone.`)) {
+                              try {
+                                const { error } = await supabase
+                                  .from('garages')
+                                  .delete()
+                                  .eq('id', garage.id);
+
+                                if (error) throw error;
+                                fetchGarages();
+                              } catch (err) {
+                                alert('Failed to delete garage: ' + err.message);
+                              }
                             }
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-700"
-                        title="Delete Garage"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                          }}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete Garage"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -2820,8 +2889,8 @@ function Garages({ user }) {
       )}
 
       {showAddModal && (
-        <AddGarageModal 
-          onClose={() => setShowAddModal(false)} 
+        <AddGarageModal
+          onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             fetchGarages();
             setShowAddModal(false);
@@ -2857,7 +2926,7 @@ function AddGarageModal({ onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
-    
+
     if (!formData.name || !formData.contact_person || !formData.phone) {
       setError('Please fill all required fields');
       return;
@@ -2896,49 +2965,49 @@ function AddGarageModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Garage</h3>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Garage Name *</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Kumar Auto Garage"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person *</label>
             <input
               type="text"
               value={formData.contact_person}
-              onChange={(e) => setFormData({...formData, contact_person: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="Owner/Manager name"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
             <input
               type="tel"
               value={formData.phone}
-              onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="10-digit phone number"
               maxLength="10"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
             <input
               type="number"
               step="0.1"
               value={formData.commission_rate}
-              onChange={(e) => setFormData({...formData, commission_rate: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, commission_rate: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="10"
             />
@@ -3099,41 +3168,37 @@ function GarageDetailsModal({ garage, user, onClose }) {
           <div className="flex px-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('referrals')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'referrals'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'referrals'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Referral Sales ({referralSales.length})
             </button>
             <button
               onClick={() => setActiveTab('direct')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'direct'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'direct'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Direct Purchases ({directSales.length})
             </button>
             <button
               onClick={() => setActiveTab('payments')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'payments'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'payments'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Credit Payments ({payments.length})
             </button>
             <button
               onClick={() => setActiveTab('commissions')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'commissions'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'commissions'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Commissions ({commissions.length})
             </button>
@@ -3195,11 +3260,10 @@ function GarageDetailsModal({ garage, user, onClose }) {
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-gray-900">₹{parseFloat(sale.total).toFixed(2)}</p>
-                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
-                              sale.payment_status === 'paid' 
+                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${sale.payment_status === 'paid'
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
-                            }`}>
+                              }`}>
                               {sale.payment_status}
                             </span>
                           </div>
@@ -3253,11 +3317,10 @@ function GarageDetailsModal({ garage, user, onClose }) {
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-orange-600">₹{parseFloat(comm.amount).toFixed(2)}</p>
-                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
-                              comm.status === 'paid'
+                            <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${comm.status === 'paid'
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-orange-100 text-orange-800'
-                            }`}>
+                              }`}>
                               {comm.status}
                             </span>
                           </div>
@@ -3355,7 +3418,7 @@ function RecordGaragePaymentModal({ garage, onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Record Credit Payment</h3>
-        
+
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-600">Outstanding Credit Balance</p>
           <p className="text-2xl font-bold text-red-600">
@@ -3466,7 +3529,7 @@ function PayCommissionModal({ garage, pendingCommissions, onClose, onSuccess }) 
             .from('commissions')
             .update({ status: 'paid' })
             .eq('id', comm.id);
-          
+
           paidCommissionIds.push(comm.id);
           remaining -= commAmount;
         }
@@ -3488,7 +3551,7 @@ function PayCommissionModal({ garage, pendingCommissions, onClose, onSuccess }) 
 
       const { error: updateError } = await supabase
         .from('garages')
-        .update({ 
+        .update({
           total_commission_owed: Math.max(0, newOwed),
           total_commission_paid: newPaid
         })
@@ -3519,7 +3582,7 @@ function PayCommissionModal({ garage, pendingCommissions, onClose, onSuccess }) 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Pay Commission</h3>
-        
+
         <div className="mb-4 p-4 bg-orange-50 rounded-lg">
           <p className="text-sm text-orange-900">Total Pending Commission</p>
           <p className="text-2xl font-bold text-orange-600">
@@ -3595,7 +3658,7 @@ function Reports({ user }) {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
 
-  useEffect(() => {  
+  useEffect(() => {
     if (activeReport) {
       fetchReportData();
     }
@@ -3628,7 +3691,7 @@ function Reports({ user }) {
     }
   };
 
-   const fetchSalesReport = async () => {
+  const fetchSalesReport = async () => {
     const { data: sales, error } = await supabase
       .from('sales')
       .select(`
@@ -3650,19 +3713,23 @@ function Reports({ user }) {
     console.log('Sales query error:', error);
     console.log('Sales found for reports:', sales);
 
-    const totalSales = sales?.reduce((sum, s) => sum + parseFloat(s.total), 0) || 0;
-    const totalGST = sales?.reduce((sum, s) => sum + parseFloat(s.gst_amount), 0) || 0;
-    const paidSales = sales?.filter(s => s.payment_status === 'paid').length || 0;
-    const creditSales = sales?.filter(s => s.payment_status === 'credit' || s.payment_status === 'partial').length || 0;
+    // Filter out returned sales from totals
+    const activeSales = sales?.filter(s => s.payment_status !== 'returned') || [];
+
+    const totalSales = activeSales.reduce((sum, s) => sum + parseFloat(s.total), 0);
+    const totalGST = activeSales.reduce((sum, s) => sum + parseFloat(s.gst_amount), 0);
+    const paidSales = activeSales.filter(s => s.payment_status === 'paid').length;
+    const creditSales = activeSales.filter(s => s.payment_status === 'credit' || s.payment_status === 'partial').length;
 
     setReportData({
       sales: sales || [],
       summary: {
-        totalSales: sales?.length || 0,
+        totalSales: activeSales?.length || 0,
         totalAmount: totalSales,
         totalGST: totalGST,
         paidCount: paidSales,
-        creditCount: creditSales
+        creditCount: creditSales,
+        returnedCount: sales?.filter(s => s.payment_status === 'returned').length || 0
       }
     });
   };
@@ -3844,60 +3911,55 @@ function Reports({ user }) {
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Analytics</h2>
-        
+
         {/* Report Type Selector */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           <button
             onClick={() => setActiveReport('sales')}
-            className={`p-3 rounded-lg border-2 transition-all ${
-              activeReport === 'sales'
+            className={`p-3 rounded-lg border-2 transition-all ${activeReport === 'sales'
                 ? 'border-blue-500 bg-blue-50 text-blue-700'
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+              }`}
           >
             <ShoppingCart className="h-6 w-6 mx-auto mb-1" />
             <p className="text-xs font-medium">Sales Report</p>
           </button>
           <button
             onClick={() => setActiveReport('profit')}
-            className={`p-3 rounded-lg border-2 transition-all ${
-              activeReport === 'profit'
+            className={`p-3 rounded-lg border-2 transition-all ${activeReport === 'profit'
                 ? 'border-green-500 bg-green-50 text-green-700'
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+              }`}
           >
             <TrendingUp className="h-6 w-6 mx-auto mb-1" />
             <p className="text-xs font-medium">Profit/Loss</p>
           </button>
           <button
             onClick={() => setActiveReport('outstanding')}
-            className={`p-3 rounded-lg border-2 transition-all ${
-              activeReport === 'outstanding'
+            className={`p-3 rounded-lg border-2 transition-all ${activeReport === 'outstanding'
                 ? 'border-red-500 bg-red-50 text-red-700'
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+              }`}
           >
             <DollarSign className="h-6 w-6 mx-auto mb-1" />
             <p className="text-xs font-medium">Outstanding</p>
           </button>
           <button
             onClick={() => setActiveReport('products')}
-            className={`p-3 rounded-lg border-2 transition-all ${
-              activeReport === 'products'
+            className={`p-3 rounded-lg border-2 transition-all ${activeReport === 'products'
                 ? 'border-purple-500 bg-purple-50 text-purple-700'
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+              }`}
           >
             <Package className="h-6 w-6 mx-auto mb-1" />
             <p className="text-xs font-medium">Products</p>
           </button>
           <button
             onClick={() => setActiveReport('commission')}
-            className={`p-3 rounded-lg border-2 transition-all ${
-              activeReport === 'commission'
+            className={`p-3 rounded-lg border-2 transition-all ${activeReport === 'commission'
                 ? 'border-orange-500 bg-orange-50 text-orange-700'
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+              }`}
           >
             <Users className="h-6 w-6 mx-auto mb-1" />
             <p className="text-xs font-medium">Commissions</p>
@@ -3911,7 +3973,7 @@ function Reports({ user }) {
             <input
               type="date"
               value={dateRange.start}
-              onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
@@ -3920,7 +3982,7 @@ function Reports({ user }) {
             <input
               type="date"
               value={dateRange.end}
-              onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
@@ -3960,7 +4022,31 @@ function Reports({ user }) {
 
 // Sales Report View
 function SalesReportView({ data, dateRange }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedSale, setExpandedSale] = useState(null);
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+
   if (!data || !data.summary) return null;
+
+  // filter the sales
+  const filteredSales = data.sales.filter(sale => {
+    const saleDate = new Date(sale.sale_date).toLocaleDateString('en-IN'); // Format: DD/MM/YYYY
+    const saleDateISO = sale.sale_date.split('T')[0]; // Format: YYYY-MM-DD
+    const saleTotal = parseFloat(sale.total).toFixed(2);
+    const saleSubtotal = parseFloat(sale.subtotal).toFixed(2);
+
+    return (
+      sale.sale_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.direct_garage?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.referral_garage?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      saleDate.includes(searchTerm) ||
+      saleDateISO.includes(searchTerm) ||
+      saleTotal.includes(searchTerm) ||
+      saleSubtotal.includes(searchTerm)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -3984,10 +4070,30 @@ function SalesReportView({ data, dateRange }) {
         </div>
       </div>
 
-      {/* Sales List */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales Transactions</h3>
+
+          {/* Search Box */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by date, amount, sale number or customer name..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            {searchTerm && (
+              <p className="text-sm text-gray-600 mt-2">
+                Found {filteredSales.length} sales matching "{searchTerm}"
+              </p>
+            )}
+          </div>
+
+          {/* Sales List */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -4000,11 +4106,16 @@ function SalesReportView({ data, dateRange }) {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">GST</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {data.sales.map(sale => (
-                  <tr key={sale.id} className="hover:bg-gray-50">
+                {filteredSales.map(sale => (
+                  <React.Fragment key={sale.id}>
+                    <tr 
+                      className="hover:bg-gray-50 cursor-pointer" 
+                      onClick={() => setExpandedSale(expandedSale === sale.id ? null : sale.id)}
+                    >
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {new Date(sale.sale_date).toLocaleDateString('en-IN')}
                     </td>
@@ -4021,21 +4132,92 @@ function SalesReportView({ data, dateRange }) {
                     <td className="px-4 py-3 text-sm text-right">₹{parseFloat(sale.gst_amount).toFixed(2)}</td>
                     <td className="px-4 py-3 text-sm text-right font-semibold">₹{parseFloat(sale.total).toFixed(2)}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        sale.payment_status === 'paid' 
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${sale.payment_status === 'paid'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                      }`}>
+                        }`}>
                         {sale.payment_status}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      {sale.payment_status !== 'returned' ? (
+                        <button
+                          onClick={() => {
+                            // You'll need to add state for this in SalesReportView
+                            setSelectedSale(sale);
+                            setShowReturnModal(true);
+                          }}
+                          className="text-red-600 hover:text-red-700 font-medium text-xs"
+                        >
+                          Return
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Returned</span>
+                      )}
+                    </td>
                   </tr>
+
+                  {expandedSale === sale.id && sale.sale_items && sale.sale_items.length > 0 && (
+                    <tr>
+                      <td colSpan="9" className="px-4 py-4 bg-blue-50">
+                        <div className="p-4">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <Package className="h-4 w-4" />
+                            Products in this sale:
+                          </h4>
+                          <table className="w-full bg-white rounded-lg overflow-hidden">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                                <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Qty</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Unit Price</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">GST Rate</th>
+                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sale.sale_items.map((item, idx) => (
+                                <tr key={idx} className="border-t">
+                                  <td className="px-3 py-2 text-sm">
+                                    <div className="font-medium text-gray-900">{item.product_name}</div>
+                                    <div className="text-xs text-gray-500">SKU: {item.product_sku || 'N/A'}</div>
+                                  </td>
+                                  <td className="px-3 py-2 text-sm text-center">{item.quantity}</td>
+                                  <td className="px-3 py-2 text-sm text-right">₹{parseFloat(item.price).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-sm text-right">{item.gst_rate}%</td>
+                                  <td className="px-3 py-2 text-sm text-right font-semibold">
+                                    ₹{parseFloat(item.total).toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {showReturnModal && selectedSale && (
+        <ReturnSaleModal
+          sale={selectedSale}
+          onClose={() => {
+            setShowReturnModal(false);
+            setSelectedSale(null);
+          }}
+          onSuccess={() => {
+            setShowReturnModal(false);
+            setSelectedSale(null);
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -4053,7 +4235,7 @@ function ProfitReportView({ data, dateRange }) {
       {/* Summary */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Profit & Loss Statement</h3>
-        
+
         <div className="space-y-4">
           <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
             <span className="font-medium text-green-900">Revenue (excl. GST)</span>
@@ -4075,9 +4257,8 @@ function ProfitReportView({ data, dateRange }) {
             </div>
           </div>
 
-          <div className={`flex justify-between items-center p-6 rounded-lg ${
-            data.profit >= 0 ? 'bg-green-100' : 'bg-red-100'
-          }`}>
+          <div className={`flex justify-between items-center p-6 rounded-lg ${data.profit >= 0 ? 'bg-green-100' : 'bg-red-100'
+            }`}>
             <span className="text-xl font-bold">Net Profit</span>
             <div className="text-right">
               <p className={`text-3xl font-bold ${data.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -4242,7 +4423,7 @@ function ProductsReportView({ data, dateRange }) {
     </div>
   );
 }
-   
+
 
 // Commission Report View
 function CommissionReportView({ data, dateRange }) {
@@ -4301,11 +4482,10 @@ function CommissionReportView({ data, dateRange }) {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-orange-600">₹{parseFloat(comm.amount).toFixed(2)}</p>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  comm.status === 'paid' 
+                <span className={`text-xs px-2 py-1 rounded-full ${comm.status === 'paid'
                     ? 'bg-green-100 text-green-800'
                     : 'bg-orange-100 text-orange-800'
-                }`}>
+                  }`}>
                   {comm.status}
                 </span>
               </div>
@@ -4338,7 +4518,7 @@ function Expenses({ user }) {
       const monthStart = `${filterMonth}-01`;
       const monthEnd = new Date(filterMonth + '-01');
       monthEnd.setMonth(monthEnd.getMonth() + 1);
-      
+
       const { data: expensesData } = await supabase
         .from('expenses')
         .select('*')
@@ -4399,14 +4579,14 @@ function Expenses({ user }) {
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
-            <button 
+            <button
               onClick={() => setShowAddExpenseModal(true)}
               className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add Expense
             </button>
-            <button 
+            <button
               onClick={() => setShowAddStockModal(true)}
               className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
             >
@@ -4457,21 +4637,19 @@ function Expenses({ user }) {
           <div className="flex px-6">
             <button
               onClick={() => setActiveTab('expenses')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'expenses'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${activeTab === 'expenses'
                   ? 'border-orange-600 text-orange-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Monthly Expenses ({expenses.length})
             </button>
             <button
               onClick={() => setActiveTab('stock')}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'stock'
+              className={`px-4 py-3 font-medium border-b-2 transition-colors ${activeTab === 'stock'
                   ? 'border-green-600 text-green-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Stock Purchases ({stockPurchases.length})
             </button>
@@ -4517,7 +4695,7 @@ function Expenses({ user }) {
                                       .from('expenses')
                                       .delete()
                                       .eq('id', expense.id);
-                                    
+
                                     if (error) throw error;
                                     fetchData();
                                   } catch (err) {
@@ -4560,7 +4738,7 @@ function Expenses({ user }) {
                             SKU: {purchase.products?.sku} | Quantity: {purchase.quantity}
                           </p>
                           <p className="text-sm text-gray-600">
-                            {new Date(purchase.purchase_date).toLocaleDateString('en-IN')} | 
+                            {new Date(purchase.purchase_date).toLocaleDateString('en-IN')} |
                             ₹{parseFloat(purchase.purchase_price).toFixed(2)} per unit
                           </p>
                           {purchase.notes && (
@@ -4581,7 +4759,7 @@ function Expenses({ user }) {
                                       .from('stock_purchases')
                                       .delete()
                                       .eq('id', purchase.id);
-                                    
+
                                     if (error) throw error;
                                     fetchData();
                                   } catch (err) {
@@ -4642,7 +4820,7 @@ function AddExpenseModal({ onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
-    
+
     if (!formData.amount || !formData.expense_date) {
       setError('Please fill all required fields');
       return;
@@ -4673,13 +4851,13 @@ function AddExpenseModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add Expense</h3>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
             <select
               value={formData.category}
-              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="rent">Rent</option>
@@ -4699,7 +4877,7 @@ function AddExpenseModal({ onClose, onSuccess }) {
               type="number"
               step="0.01"
               value={formData.amount}
-              onChange={(e) => setFormData({...formData, amount: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="Enter amount"
             />
@@ -4710,16 +4888,16 @@ function AddExpenseModal({ onClose, onSuccess }) {
             <input
               type="date"
               value={formData.expense_date}
-              onChange={(e) => setFormData({...formData, expense_date: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               rows="3"
               placeholder="Add details about this expense..."
@@ -4777,7 +4955,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
         .from('products')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
@@ -4786,13 +4964,13 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
   };
 
   const selectedProduct = products.find(p => p.id === formData.product_id);
-  const totalCost = formData.quantity && formData.purchase_price 
+  const totalCost = formData.quantity && formData.purchase_price
     ? (parseFloat(formData.quantity) * parseFloat(formData.purchase_price)).toFixed(2)
     : '0.00';
 
   const handleSubmit = async () => {
     setError('');
-    
+
     if (!formData.product_id || !formData.quantity || !formData.purchase_price || !formData.purchase_date) {
       setError('Please fill all required fields');
       return;
@@ -4823,7 +5001,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
       const currentQty = selectedProduct.current_quantity;
       const { error: updateError } = await supabase
         .from('products')
-        .update({ 
+        .update({
           current_quantity: currentQty + quantity,
           purchase_price: purchasePrice  // Update latest purchase price
         })
@@ -4848,7 +5026,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add Stock Purchase</h3>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Select Product *</label>
@@ -4862,14 +5040,14 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
-            
+
             {searchTerm && (
               <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg mb-2">
                 {filteredProducts.map(product => (
                   <button
                     key={product.id}
                     onClick={() => {
-                      setFormData({...formData, product_id: product.id});
+                      setFormData({ ...formData, product_id: product.id });
                       setSearchTerm('');
                     }}
                     className="w-full p-3 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0 text-left"
@@ -4897,7 +5075,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
               <input
                 type="number"
                 value={formData.quantity}
-                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="Enter quantity"
                 disabled={!formData.product_id}
@@ -4910,7 +5088,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
                 type="number"
                 step="0.01"
                 value={formData.purchase_price}
-                onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="Price per unit"
                 disabled={!formData.product_id}
@@ -4930,7 +5108,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
             <input
               type="date"
               value={formData.purchase_date}
-              onChange={(e) => setFormData({...formData, purchase_date: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
@@ -4939,7 +5117,7 @@ function AddStockPurchaseModal({ onClose, onSuccess }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
             <textarea
               value={formData.notes}
-              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               rows="2"
               placeholder="Supplier, invoice number, etc..."
@@ -5140,9 +5318,9 @@ function EditProductModal({ product, onClose, onSuccess }) {
 
   const handleSubmit = async () => {
     setError('');
-    
-    if (!formData.name || !formData.category || !formData.purchase_price || 
-        !formData.selling_price || !formData.minimum_quantity) {
+
+    if (!formData.name || !formData.category || !formData.purchase_price ||
+      !formData.selling_price || !formData.minimum_quantity) {
       setError('Please fill all required fields');
       return;
     }
@@ -5176,70 +5354,70 @@ function EditProductModal({ product, onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Product</h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Optional)</label>
             <input
               type="text"
               value={formData.sku}
-              onChange={(e) => setFormData({...formData, sku: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., BAT001"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Exide Battery 12V"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
             <input
               type="text"
               value={formData.category}
-              onChange={(e) => setFormData({...formData, category: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Batteries"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
             <input
               type="number"
               step="0.01"
               value={formData.purchase_price}
-              onChange={(e) => setFormData({...formData, purchase_price: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="3500"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
             <input
               type="number"
               step="0.01"
               value={formData.selling_price}
-              onChange={(e) => setFormData({...formData, selling_price: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="4200"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate (%) *</label>
             <select
               value={formData.gst_rate}
-              onChange={(e) => setFormData({...formData, gst_rate: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, gst_rate: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             >
               <option value="0">0%</option>
@@ -5249,13 +5427,13 @@ function EditProductModal({ product, onClose, onSuccess }) {
               <option value="28">28%</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Quantity *</label>
             <input
               type="number"
               value={formData.minimum_quantity}
-              onChange={(e) => setFormData({...formData, minimum_quantity: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, minimum_quantity: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="10"
             />
@@ -5307,13 +5485,13 @@ function QuickAddStockModal({ product, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const totalCost = quantity && purchasePrice 
+  const totalCost = quantity && purchasePrice
     ? (parseFloat(quantity) * parseFloat(purchasePrice)).toFixed(2)
     : '0.00';
 
   const handleSubmit = async () => {
     setError('');
-    
+
     if (!quantity || !purchasePrice) {
       setError('Please fill all required fields');
       return;
@@ -5341,7 +5519,7 @@ function QuickAddStockModal({ product, onClose, onSuccess }) {
 
       const { error: updateError } = await supabase
         .from('products')
-        .update({ 
+        .update({
           current_quantity: product.current_quantity + qty,
           purchase_price: price
         })
@@ -5361,7 +5539,7 @@ function QuickAddStockModal({ product, onClose, onSuccess }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Add Stock</h3>
-        
+
         <div className="mb-4 p-3 bg-blue-50 rounded-lg">
           <p className="font-medium text-blue-900">{product.name}</p>
           <p className="text-sm text-blue-700">SKU: {product.sku || 'N/A'} | Current Stock: {product.current_quantity}</p>
@@ -5434,6 +5612,193 @@ function QuickAddStockModal({ product, onClose, onSuccess }) {
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-green-300"
           >
             {loading ? 'Adding...' : 'Add Stock'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReturnSaleModal({ sale, onClose, onSuccess }) {
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleReturn = async () => {
+    if (!reason.trim()) {
+      setError('Please provide a reason for return');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to return this sale? This will:\n- Add products back to inventory\n- Reverse payment amounts\n- Mark sale as returned\n\nThis cannot be undone!`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch sale items
+      const { data: saleItems } = await supabase
+        .from('sale_items')
+        .select('*')
+        .eq('sale_id', sale.id);
+
+      // Add products back to inventory
+      for (const item of saleItems) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('current_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (product) {
+          await supabase
+            .from('products')
+            .update({
+              current_quantity: product.current_quantity + item.quantity
+            })
+            .eq('id', item.product_id);
+        }
+      }
+
+      // If customer sale, reverse credit balance
+      if (sale.customer_id && sale.payment_status !== 'paid') {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('credit_balance')
+          .eq('id', sale.customer_id)
+          .single();
+
+        if (customer) {
+          const amountToReverse = parseFloat(sale.total) - parseFloat(sale.amount_paid);
+          const newBalance = Math.max(0, parseFloat(customer.credit_balance) - amountToReverse);
+
+          await supabase
+            .from('customers')
+            .update({ credit_balance: newBalance })
+            .eq('id', sale.customer_id);
+        }
+      }
+
+      // If garage sale, reverse credit balance
+      if (sale.garage_id && sale.payment_status !== 'paid') {
+        const { data: garage } = await supabase
+          .from('garages')
+          .select('credit_balance')
+          .eq('id', sale.garage_id)
+          .single();
+
+        if (garage) {
+          const amountToReverse = parseFloat(sale.total) - parseFloat(sale.amount_paid);
+          const newBalance = Math.max(0, parseFloat(garage.credit_balance) - amountToReverse);
+
+          await supabase
+            .from('garages')
+            .update({ credit_balance: newBalance })
+            .eq('id', sale.garage_id);
+        }
+      }
+
+      // If referral, reverse commission
+      if (sale.referred_by_garage_id && sale.commission_amount > 0) {
+        // Delete commission record
+        await supabase
+          .from('commissions')
+          .delete()
+          .eq('sale_id', sale.id);
+
+        // Update garage commission owed
+        const { data: garage } = await supabase
+          .from('garages')
+          .select('total_commission_owed')
+          .eq('id', sale.referred_by_garage_id)
+          .single();
+
+        if (garage) {
+          const newOwed = Math.max(0, parseFloat(garage.total_commission_owed) - parseFloat(sale.commission_amount));
+          await supabase
+            .from('garages')
+            .update({ total_commission_owed: newOwed })
+            .eq('id', sale.referred_by_garage_id);
+        }
+      }
+
+      // Create return record
+      await supabase
+        .from('sale_returns')
+        .insert([{
+          sale_id: sale.id,
+          reason: reason
+        }]);
+
+      // Mark sale as returned by updating payment_status
+      await supabase
+        .from('sales')
+        .update({
+          payment_status: 'returned',
+          amount_paid: 0
+        })
+        .eq('id', sale.id);
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to process return');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Return Sale</h3>
+
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm font-medium text-yellow-900">Sale #{sale.sale_number}</p>
+          <p className="text-sm text-yellow-700">Total: ₹{parseFloat(sale.total).toFixed(2)}</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Return *</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              rows="3"
+              placeholder="Why is this sale being returned?"
+            />
+          </div>
+
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-900 font-medium">⚠️ This will:</p>
+            <ul className="text-sm text-red-700 mt-2 space-y-1 list-disc list-inside">
+              <li>Add products back to inventory</li>
+              <li>Reverse customer/garage credit</li>
+              <li>Reverse commission (if applicable)</li>
+              <li>Mark sale as "returned"</li>
+            </ul>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleReturn}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:bg-red-300"
+          >
+            {loading ? 'Processing Return...' : 'Process Return'}
           </button>
         </div>
       </div>
